@@ -2,97 +2,96 @@
 
 # Muzikk
 
-**Gestionnaire de demandes et de téléchargement de musique, façon Overseerr.**
+**A music request and download manager, in the spirit of Overseerr.**
 
-Catalogue MusicBrainz, authentification et musicothèque Jellyfin, acquisition via
-Soulseek (slskd) et BitTorrent (Prowlarr + qBittorrent), import et tagging
-automatiques en lossless.
+MusicBrainz catalogue, Jellyfin authentication and library, acquisition through
+Soulseek (slskd) and BitTorrent (Prowlarr + qBittorrent), automatic lossless
+import and tagging.
 
 </div>
 
 ---
 
-## Sommaire
+## Contents
 
-- [Ce que fait Muzikk](#ce-que-fait-muzikk)
-- [Prérequis](#prérequis)
+- [What Muzikk does](#what-muzikk-does)
+- [Requirements](#requirements)
 - [Installation](#installation)
-- [Premier démarrage](#premier-démarrage)
-- [Configuration des services](#configuration-des-services)
-- [Modèle de nommage](#modèle-de-nommage)
-- [Comment fonctionne l'acquisition](#comment-fonctionne-lacquisition)
-- [Variables d'environnement](#variables-denvironnement)
-- [Développement](#développement)
-- [Dépannage](#dépannage)
+- [First start](#first-start)
+- [Configuring the services](#configuring-the-services)
+- [Naming template](#naming-template)
+- [How acquisition works](#how-acquisition-works)
+- [Environment variables](#environment-variables)
+- [Development](#development)
+- [Troubleshooting](#troubleshooting)
 
 ---
 
-## Ce que fait Muzikk
+## What Muzikk does
 
-- **Recherche** dans MusicBrainz (instance locale en priorité, `musicbrainz.org` en secours)
-  par album, par artiste, par piste ou par label : la fiche d'un label liste tout son
-  catalogue, prêt à demander.
-- **Marque les albums déjà possédés** dans la musicothèque Jellyfin : coche verte pleine
-  quand le MBID correspond, coche claire pour une correspondance floue, badge orange
-  « améliorable » quand l'album existant n'est pas en lossless.
-- **Demandes par album entier** — jamais piste par piste — avec approbation
-  administrateur optionnelle et quotas hebdomadaires par utilisateur.
-- **Acquisition automatique** : les providers sont interrogés dans l'ordre configuré
-  (slskd, trackers publics, trackers privés par défaut). Chaque candidat est noté ;
-  au-dessous du seuil, on passe au suivant.
-- **Import complet** : vérification d'intégrité (`flac -t` / `ffmpeg`), tagging
-  MusicBrainz exhaustif, pochette intégrée et `cover.jpg`, rangement dans la
-  bibliothèque selon un modèle de nommage configurable, hardlink pour continuer à seeder,
-  puis rescan Jellyfin.
-- **Suivi d'artistes et wishlist** : l'onglet *Suivi* liste ce qui manque chez les
-  artistes suivis — leurs nouveautés seules, ou toute leur discographie absente, au
-  choix par artiste. Rien n'est jamais téléchargé sans un clic.
-- **Recherche par piste** : un titre de chanson suffit pour retrouver l'album qui le
-  contient, dans la musicothèque comme dans MusicBrainz.
-- **Écoute directe** : les albums déjà présents se lisent dans Muzikk, le flux passant
-  par l'API plutôt que par un accès direct à Jellyfin, avec file d'attente, lecture
-  aléatoire et répétition.
-- **Listes de lecture Jellyfin** : celles du compte connecté se consultent, s'écoutent et
-  se modifient depuis Muzikk — ajouter une piste ou un album entier, en retirer une,
-  créer ou supprimer une liste.
-- **Extraits de 30 secondes** pour écouter un morceau qu'on ne possède pas avant de le
-  demander, fournis par Deezer puis par iTunes et relayés par l'API.
-- **Import local** : un cadre sous la recherche, réservé aux comptes autorisés, pour
-  glisser un dossier d'album ou le parcourir depuis l'explorateur. Muzikk propose les
-  candidats MusicBrainz (ou accepte un MBID, ou un formulaire manuel), écrit les tags,
-  pose `cover.jpg` et `folder.jpg`, puis range les fichiers selon le modèle de nommage.
-  Une copie déjà présente n'est remplacée que si la nouvelle est meilleure (lossy →
-  lossless), après confirmation.
-- **Atelier de métadonnées** (administrateurs) : analyse du dossier musical à la
-  recherche des albums sans tag MusicBrainz, sans pochette, aux tags incomplets, en
-  doublon ou invisibles pour Jellyfin ; identification via le serveur MusicBrainz local,
-  un MBID collé à la main ou une empreinte audio AcoustID ; simulation avant/après puis
-  écriture des tags et de la pochette. Deux boutons complètent l'atelier : l'un uniformise
-  les pochettes sur disque pour que chaque dossier d'album contienne à la fois `cover.jpg`
-  et `folder.jpg`, l'autre envoie à Jellyfin les pochettes de ses albums restés sans image.
-- **Activité temps réel** en SSE, avec le journal détaillé de chaque demande : quel
-  provider, quel score, pourquoi un candidat a été rejeté.
+- **Search** MusicBrainz (local instance first, `musicbrainz.org` as a fallback)
+  by album, artist, track or label: a label page lists its whole catalogue,
+  ready to request.
+- **Flags albums you already own** in the Jellyfin library: a solid green tick
+  when the MBID matches, a lighter one on a fuzzy match, an amber "upgradeable"
+  badge when the copy you hold is not lossless.
+- **Whole-album requests** — never track by track — with optional administrator
+  approval and weekly quotas per user.
+- **Automatic acquisition**: providers are queried in the configured order
+  (slskd, public trackers, private trackers by default). Each candidate is
+  scored; below the threshold, Muzikk moves on.
+- **Full import**: integrity check (`flac -t` / `ffmpeg`), exhaustive MusicBrainz
+  tagging, embedded artwork and `cover.jpg`, filing in the library under a
+  configurable naming template, a hardlink so seeding continues, then a Jellyfin
+  rescan.
+- **Artist watchlist and wishlist**: the *Watchlist* tab lists what is missing
+  for followed artists — new releases only, or their whole missing discography,
+  per artist. Nothing is ever downloaded without a click.
+- **Track search**: a song title is enough to find the album that contains it,
+  in the library and in MusicBrainz alike.
+- **Playback inside Muzikk**: albums you already own play through the API rather
+  than a direct Jellyfin link, with a queue, shuffle and repeat.
+- **Jellyfin playlists**: those of the signed-in account can be browsed, played
+  and edited from Muzikk — add a track or a whole album, remove a track, create
+  or delete a list.
+- **Thirty-second previews** to hear a track you do not own before requesting
+  it, from Deezer then iTunes, relayed by the API.
+- **Local import**: a drop zone under the home search, reserved for accounts
+  that have the right, to drop an album folder or pick one from the file
+  picker. Muzikk proposes MusicBrainz candidates (or accepts an MBID, or a
+  manual form), writes the tags, lays down `cover.jpg` and `folder.jpg`, then
+  files the tracks under the naming template. An existing copy is replaced only
+  if the new one is better (lossy → lossless), after confirmation.
+- **Metadata workshop** (administrators): walks the music folder for albums
+  without a MusicBrainz tag, without artwork, with incomplete tags, duplicates,
+  or invisible to Jellyfin; identification via the local MusicBrainz server, a
+  pasted MBID or an AcoustID fingerprint; a before/after simulation, then the
+  write of tags and artwork. Two extra buttons: one pairs artwork on disk so
+  every album folder holds both `cover.jpg` and `folder.jpg`, the other sends
+  Jellyfin the covers of albums it still shows empty.
+- **Live activity** over SSE, with the full log of each request: which
+  provider, which score, why a candidate was rejected.
 
-Tout tourne dans **un seul conteneur** : FastAPI sert l'API et le SPA React, un worker
-asyncio interne consomme une file de travaux stockée en SQLite. Pas de Redis, pas de
+Everything runs in **one container**: FastAPI serves the API and the React SPA,
+an internal asyncio worker drains a job queue stored in SQLite. No Redis, no
 Postgres.
 
-## Prérequis
+## Requirements
 
-| Service | Rôle | Obligatoire |
+| Service | Role | Required |
 | --- | --- | --- |
-| Jellyfin | Authentification, liste des utilisateurs, musicothèque, rescan | Oui |
-| MusicBrainz | Catalogue (recherche, éditions, pistes) | Recommandé (repli public sinon) |
-| slskd | Téléchargement Soulseek | Au moins un provider |
-| Prowlarr + qBittorrent | Recherche et téléchargement torrent | Au moins un provider |
+| Jellyfin | Authentication, user list, music library, rescan | Yes |
+| MusicBrainz | Catalogue (search, releases, tracks) | Recommended (public fallback otherwise) |
+| slskd | Soulseek downloading | At least one provider |
+| Prowlarr + qBittorrent | Torrent search and downloading | At least one provider |
 
-Un réseau Docker externe partagé — nommé `mediastack` dans le `docker-compose.yml`
-fourni — permet à Muzikk de joindre ces conteneurs par leur nom.
+A shared external Docker network — named `mediastack` in the shipped
+`docker-compose.yml` — lets Muzikk reach those containers by name.
 
-> **Les chemins de volumes doivent être identiques d'un conteneur à l'autre.** Si
-> qBittorrent écrit dans `/downloads/torrents`, Muzikk doit voir ce dossier au même
-> chemin, sinon les hardlinks deviennent des copies (et les fichiers en seed peuvent
-> être dupliqués).
+> **Volume paths must be identical from one container to the next.** If
+> qBittorrent writes to `/downloads/torrents`, Muzikk has to see that same
+> folder at that same path, otherwise hardlinks silently become copies (and
+> files still being seeded get duplicated).
 
 ## Installation
 
@@ -105,550 +104,573 @@ docker compose pull
 docker compose up -d
 ```
 
-L'image publiée est `ixeygrek/muzikk` sur [Docker Hub](https://hub.docker.com/r/ixeygrek/muzikk). Ajoutez `--build` à `docker compose up` seulement si vous voulez construire depuis les sources.
+The published image is `ixeygrek/muzikk` on [Docker Hub](https://hub.docker.com/r/ixeygrek/muzikk).
+Add `--build` to `docker compose up` only if you want to build from the source.
 
-L'interface est disponible sur `http://<hôte>:8383`.
+The interface is then available at `http://<host>:8383`.
 
-Le réseau doit exister au préalable :
+The network must exist first:
 
 ```bash
-docker network create mediastack   # si ce n'est pas déjà fait
+docker network create mediastack   # if it does not exist yet
 ```
 
 ### Volumes
 
-| Volume | Contenu |
+| Volume | Contents |
 | --- | --- |
-| `/config` | base SQLite, clé de chiffrement, clé JWT, cache des pochettes, logs |
-| `MUSIC_LIBRARY_CONTAINER` (`/music`) | bibliothèque Jellyfin, destination des imports |
-| `DOWNLOADS_CONTAINER` (`/downloads`) | racine de téléchargement partagée avec slskd et qBittorrent |
+| `/config` | SQLite database, encryption key, JWT key, cover cache, logs |
+| `MUSIC_LIBRARY_CONTAINER` (`/music`) | The Jellyfin library, and where imports are filed |
+| `DOWNLOADS_CONTAINER` (`/downloads`) | The download root shared with slskd and qBittorrent |
 
-Les chemins **hôte** viennent de `MUSIC_LIBRARY` et `DOWNLOADS_ROOT`, les chemins **dans
-le conteneur** de `MUSIC_LIBRARY_CONTAINER` et `DOWNLOADS_CONTAINER`. Ces deux dernières
-variables existent parce que les autres conteneurs ne voient pas forcément les disques au
-même endroit : donnez à Muzikk le chemin que Jellyfin utilise pour la musicothèque, et
-celui que slskd et qBittorrent utilisent pour les téléchargements. Rien n'interdit de
-monter deux fois le même disque hôte sur deux chemins différents, les hardlinks
-continuent de fonctionner puisque le système de fichiers est le même.
+The **host** paths come from `MUSIC_LIBRARY` and `DOWNLOADS_ROOT`, the paths
+**inside the container** from `MUSIC_LIBRARY_CONTAINER` and
+`DOWNLOADS_CONTAINER`. Those last two exist because the other containers do
+not necessarily see the disks in the same place: give Muzikk the path Jellyfin
+uses for the library, and the one slskd and qBittorrent use for downloads.
+Mounting the same host disk twice on two different paths is fine — hardlinks
+keep working, since it is still one filesystem.
 
-## Premier démarrage
+## First start
 
-Muzikk s'authentifie via Jellyfin : tant que Jellyfin n'est pas configuré, personne ne
-peut se connecter. Un assistant d'installation est donc ouvert au premier lancement,
-puis définitivement fermé.
+Muzikk authenticates through Jellyfin: nobody can sign in until Jellyfin is
+configured. A setup wizard is therefore open on the first launch, and closed
+for good afterwards.
 
-1. **Jellyfin** — URL (par exemple `http://jellyfin:8096`) et clé d'API, créée dans
-   Jellyfin sous *Tableau de bord → Avancé → Clés d'API*.
-2. **Musicothèque** — cochez les bibliothèques musicales à surveiller et indiquez le
-   dossier de destination des imports (`/music` par défaut).
-3. Les utilisateurs Jellyfin sont importés. Connectez-vous avec un compte
-   **administrateur Jellyfin** : il devient administrateur Muzikk.
+1. **Jellyfin** — the URL, for instance `http://jellyfin:8096`, and an API key
+   created in Jellyfin under *Dashboard → Advanced → API keys*.
+2. **Library** — tick the music libraries to watch, and give the destination
+   folder for imports (`/music` by default).
+3. Jellyfin users are imported. Sign in with a **Jellyfin administrator**
+   account: it becomes a Muzikk administrator.
 
-L'indexation de la musicothèque démarre en tâche de fond. Selon la taille, comptez
-quelques minutes avant que les badges « déjà possédé » apparaissent.
+Indexing the library starts in the background. Depending on its size, expect a
+few minutes before the "already owned" badges show up.
 
-## Configuration des services
+## Configuring the services
 
-Tout se règle dans **Administration**, section par section. Chaque service dispose d'un
-bouton *Tester la connexion* qui utilise les valeurs affichées à l'écran, y compris non
-enregistrées. Les secrets sont chiffrés au repos (Fernet, clé générée dans `/config`) et
-renvoyés masqués : laissez le champ masqué pour conserver la valeur existante.
+Everything is set in **Administration**, one section at a time. Each service
+has a *Test connection* button that uses the values currently on screen,
+including unsaved ones. Secrets are encrypted at rest (Fernet, key generated
+in `/config`) and come back masked: leave a masked field alone to keep its
+current value.
 
 ### Jellyfin
 
-| Réglage | Détail |
+| Setting | Detail |
 | --- | --- |
-| URL / Clé d'API | Voir l'assistant ci-dessus |
-| Bibliothèques surveillées | Limite l'indexation aux bibliothèques musicales choisies |
-| Déclencher un scan après import | Appelle `POST /Library/Refresh` une fois l'album rangé |
-| Autoriser tous les utilisateurs | Sinon seuls les identifiants listés peuvent se connecter |
+| URL / API key | As in the wizard above |
+| Watched libraries | Restricts indexing to the music libraries you pick |
+| Trigger a scan after import | Calls `POST /Library/Refresh` once an album is filed |
+| Allow every Jellyfin user | Turn it off and only the listed user ids may sign in |
 
-Les administrateurs Jellyfin (`Policy.IsAdministrator`) sont administrateurs Muzikk.
+Jellyfin administrators (`Policy.IsAdministrator`) are Muzikk administrators.
 
 ### MusicBrainz
 
-Pointez `url` sur votre instance locale (`http://musicbrainz:5000`). La recherche
-plein texte exige **Solr** ; sans lui, seules les recherches par identifiant
-fonctionnent et Muzikk bascule sur `musicbrainz.org` si le repli est activé.
+Point `url` at your local instance (`http://musicbrainz:5000`). Full-text
+search needs **Solr**; without it only identifier lookups work, and Muzikk
+falls back to `musicbrainz.org` if the fallback is enabled.
 
-Les limites de débit sont respectées séparément pour l'instance locale (10 req/s par
-défaut) et le serveur public (1 req/s, comme l'exige MusicBrainz).
+Rate limits are honoured separately for the local instance (10 requests per
+second by default) and for the public server (1 per second, as MusicBrainz
+requires).
 
-La page d'accueil cherche par album, artiste, piste ou **label**. MusicBrainz rattache
-les labels aux éditions et non aux albums, alors la fiche d'un label parcourt ses
-parutions et les replie en albums : un disque pressé cinq fois n'apparaît qu'une fois,
-et les cinq pressages servent quand même à reconnaître ce que vous possédez déjà. Le
-compteur affiché sur la fiche est donc un nombre de parutions, plus grand que le nombre
-de vignettes.
+The home page searches by album, artist, track or **label**. MusicBrainz
+attaches labels to releases rather than to albums, so Muzikk walks a label's
+releases and folds them back into albums. A record pressed five times shows
+up once, and the five pressings still help recognise what you already own.
+The counter on the label page is therefore a number of releases, larger than
+the number of tiles.
 
-### Pochettes
+### Cover art
 
-Cover Art Archive, avec cache disque dans `/config/cache`. Vous pouvez choisir la
-taille, l'intégration dans les fichiers et l'écriture d'un `cover.jpg` et d'un
-`folder.jpg` par album. Les deux noms existent parce que les lecteurs ne s'accordent
-pas : Jellyfin et Kodi lisent les deux, Plex ne regarde que `cover.jpg`, d'autres que
-`folder.jpg`. Écrire les deux coûte quelques kilo-octets et supprime la question.
+Cover Art Archive, with a disk cache in `/config/cache`. You choose the size,
+whether it is embedded in the files, and whether a `cover.jpg` and a
+`folder.jpg` are written next to the tracks. Both names exist because players
+disagree: Jellyfin and Kodi read either, Plex only looks at `cover.jpg`,
+others only at `folder.jpg`. Writing both costs a few kilobytes and settles
+the question.
 
-Pour un album du catalogue, Muzikk essaie la pochette de l'édition, puis celle du
-release-group. Pour un album que vous possédez déjà, il essaie successivement l'image
-de Jellyfin, un fichier `cover.jpg`, `folder.jpg` ou `front.jpg` posé dans le dossier de
-l'album, la pochette **embarquée dans les tags** de la première piste, et enfin Cover
-Art Archive. Tout ce qui est trouvé est mis en cache et redimensionné.
+For a catalogue album, Muzikk tries the release artwork then the release
+group. For an album you already own, it tries in turn the Jellyfin image, a
+`cover.jpg`, `folder.jpg` or `front.jpg` in the album folder, the artwork
+**embedded in the tags** of the first track, and finally the Cover Art
+Archive. Anything found is cached and resized.
 
-Quand aucune source n'a d'image — c'est courant pour les mashups, les bootlegs et les
-compilations obscures — la vignette affiche un disque par défaut plutôt qu'un cadre vide.
-C'est vrai partout : grilles d'albums, résultats par piste, propositions MusicBrainz de la
-page Métadonnées et lecteur.
+When no source has an image — common for mashups, bootlegs and obscure
+compilations — the tile shows a default disc rather than an empty frame. That
+is true everywhere: album grids, track results, MusicBrainz proposals on the
+Metadata page, and the player.
 
-Le bouton *Vider le cache des pochettes* de la section Système force une nouvelle
-recherche, utile après avoir ajouté des pochettes manquantes à votre bibliothèque. Le
-cache est purgé automatiquement quand vous changez l'URL du service.
+The *Clear the cover cache* button in the System section forces a fresh
+lookup, which is handy after adding missing artwork to your library. The
+cache is purged automatically when you change the service URL.
 
 ### slskd
 
-| Réglage | Détail |
+| Setting | Detail |
 | --- | --- |
 | URL | `http://slskd:5030` |
-| Clé d'API | Dans `slskd.yml`, section `web.authentication.api_keys` |
-| Préfixe d'URL | À renseigner si slskd tourne derrière un sous-chemin |
-| Dossier de téléchargement | Chemin **vu par Muzikk**, par défaut `/downloads/slskd` |
-| Durée de recherche | En millisecondes — slskd interprète cette valeur en ms malgré sa documentation |
-| Vitesse minimale / file maximale du pair | Filtre les pairs trop lents ou saturés |
+| API key | From `slskd.yml`, under `web.authentication.api_keys` |
+| URL prefix | Only needed when slskd runs behind a subpath |
+| Download folder | The path **as Muzikk sees it**, `/downloads/slskd` by default |
+| Search duration | In milliseconds — slskd reads this value as milliseconds despite its own documentation |
+| Minimum peer speed / maximum queue | Filters out peers that are too slow or too busy |
 
-Assurez-vous que la clé d'API slskd autorise l'adresse du conteneur Muzikk (`cidr`).
+Make sure the slskd API key allows the Muzikk container address in its
+`cidr`.
 
-Le **dossier de téléchargement** est le réglage le plus souvent mal renseigné. slskd et
-Muzikk voient chacun le disque à travers leurs propres montages, et c'est le chemin côté
-Muzikk qu'il faut indiquer ici. Si slskd écrit dans `/media/wdred/downloads/complete/soulseek`
-au sens de son propre conteneur, montez le même volume dans Muzikk et saisissez le chemin
-correspondant. Le test de connexion de la section slskd vérifie que Muzikk sait lire ce
-dossier et refuse de valider sinon : un transfert réussi dont les fichiers sont introuvables
-serait téléchargé pour rien.
+The **download folder** is the single most often mistyped setting. slskd and
+Muzikk each see the disk through their own mounts, and it is the Muzikk-side
+path that belongs here. If slskd writes to
+`/media/wdred/downloads/complete/soulseek` in its own container, mount the
+same volume in Muzikk and enter the matching path. The slskd connection test
+checks that Muzikk can read that folder and refuses to pass otherwise: a
+transfer that succeeds but whose files cannot be found was downloaded for
+nothing.
 
 ### Prowlarr
 
-| Réglage | Détail |
+| Setting | Detail |
 | --- | --- |
 | URL | `http://prowlarr:9696` |
-| Clé d'API | *Settings → General → API Key* |
-| Catégories | `3000` (Audio), `3010` (MP3), `3040` (Lossless) par défaut |
-| Recherche musicale dédiée | Utilise `type=music` quand l'indexeur le supporte |
-| Vérifier le `.torrent` avant ajout | **À laisser activé** : c'est ce qui évite l'essentiel des faux positifs |
+| API key | *Settings → General → API Key* |
+| Categories | `3000` (Audio), `3010` (MP3), `3040` (Lossless) by default |
+| Dedicated music search | Uses `type=music` where the indexer supports it |
+| Check the `.torrent` before adding it | **Leave this on** — it is what avoids most false positives |
 
-Après avoir enregistré, allez dans **Indexeurs** et lancez la synchronisation. Chaque
-indexeur peut être activé, priorisé, classé public/privé et recevoir un seuil de
-seeders qui lui est propre.
+Once saved, go to **Indexers** and run the sync. Each indexer can then be
+enabled, prioritised, classified public or private, and given a seeder
+threshold of its own.
 
 ### qBittorrent
 
-| Réglage | Détail |
+| Setting | Detail |
 | --- | --- |
-| URL | `http://qbittorrent:8080`, à adapter si `WEBUI_PORT` est différent |
-| Utilisateur / Mot de passe | Vides si l'authentification est désactivée pour le réseau local |
-| Catégorie | `muzikk`, créée automatiquement |
-| Dossier de téléchargement | Chemin **identique** dans les deux conteneurs |
-| Continuer le seed après import | Recommandé pour les trackers privés |
+| URL | `http://qbittorrent:8080`, adjust if `WEBUI_PORT` differs |
+| Username / password | Leave empty when authentication is disabled for the local network |
+| Category | `muzikk`, created automatically |
+| Download folder | The **same** path in both containers |
+| Keep seeding after import | Recommended for private trackers |
 
-L'authentification a changé avec qBittorrent 5.2 : la connexion réussie renvoie un
-`204` vide au lieu d'un `200` contenant `Ok.`, un mauvais mot de passe renvoie `401` au
-lieu d'un `200` contenant `Fails.`, et le cookie de session a été renommé. Muzikk gère
-les deux générations. Pour interpréter un échec :
+Authentication changed with qBittorrent 5.2: a successful login returns an
+empty `204` instead of a `200` containing `Ok.`, a wrong password returns
+`401` instead of a `200` containing `Fails.`, and the session cookie was
+renamed. Muzikk handles both generations. To read a failure:
 
-- **HTTP 401** — identifiants refusés sur qBittorrent 5.2 et suivants. Sur les versions
-  antérieures, ce code signale plutôt un rejet de l'en-tête `Host`, fréquent lorsqu'on
-  atteint qBittorrent par son nom de conteneur : décochez alors *Activer la validation
-  de l'en-tête Host* dans *Outils → Options → Web UI*.
-- **`Fails.`** — identifiants refusés sur qBittorrent 5.1 et antérieurs.
-- **HTTP 403** — après quelques échecs, qBittorrent bannit temporairement l'adresse.
-  Redémarrez le conteneur pour lever le bannissement.
+- **HTTP 401** — credentials refused on qBittorrent 5.2 and later. On earlier
+  versions this code usually means the `Host` header was rejected, which is
+  common when reaching qBittorrent by container name: untick *Enable Host
+  header validation* in *Tools → Options → Web UI*.
+- **`Fails.`** — credentials refused on qBittorrent 5.1 and earlier.
+- **HTTP 403** — after a few failures qBittorrent temporarily bans the
+  address. Restart the container to lift it.
 
-L'alternative qui évite tout cela est de cocher *Bypass authentication for clients in
-whitelisted IP subnets* avec le sous-réseau Docker, puis de laisser le champ Utilisateur
-vide dans Muzikk.
+The alternative that avoids all of this is to tick *Bypass authentication for
+clients in whitelisted IP subnets* with your Docker subnet, and leave the
+username empty in Muzikk.
 
-### Qualité
+### Quality
 
-Formats lossless acceptés (du meilleur au moins bon), repli compressé optionnel, seuils
-de taille par piste, nombre de seeders, tolérance sur le nombre de pistes et **score
-minimal** d'acceptation (78 par défaut). Baissez-le si trop d'albums échouent, montez-le
-si des mauvais albums passent.
+Accepted lossless formats from best to worst, an optional compressed
+fallback, size thresholds per track, a seeder count, a tolerance on the track
+count and a **minimum score** for acceptance — 78 by default. Lower it if too
+many albums fail, raise it if bad ones get through.
 
-*Exiger l'artiste dans le chemin du candidat* refuse une sortie dont le chemin ne nomme
-aucun artiste ressemblant à celui demandé. L'artiste ne pèse que 20 points sur 100, donc
-sans cette règle l'album d'un homonyme — même titre, même nombre de pistes, même format —
-franchit le seuil et peut être importé à la place du bon. Le prix à payer est le dossier
-nommé d'après le seul album, sans son artiste, qui sera refusé lui aussi : décochez la
-règle si vos sources sont rangées ainsi.
+*Require the artist in the candidate path* rejects a release whose path names
+no artist resembling the one requested. The artist is only worth 20 points
+out of 100, so without this rule a namesake's album — same title, same track
+count, same format — clears the threshold and can be imported instead of the
+right one. The price is that a folder named after the album alone, without
+its artist, is refused too: untick the rule if your sources are organised
+that way.
 
-### Ordre des providers
+### Provider order
 
-Réordonnez les groupes `slskd`, `trackers publics` et `trackers privés`. Le premier qui
-propose un candidat au-dessus du seuil gagne.
+Reorder the `slskd`, `public trackers` and `private trackers` groups. The
+first one to offer a candidate above the threshold wins.
 
-### Métadonnées
+### Metadata
 
-Pilote l'atelier de métadonnées, accessible aux administrateurs depuis l'entrée
-*Métadonnées* du menu. L'analyse parcourt le dossier de la bibliothèque, groupe les
-fichiers par album et signale sept anomalies : absence de tag MusicBrainz, correspondance
-seulement probable, pochette manquante, tags incomplets, tags en double, doublon, dossier
-invisible pour Jellyfin.
+This section drives the metadata workshop, which administrators reach from
+the *Metadata* entry in the menu. The analysis walks the library folder,
+groups files per album and reports seven anomalies: no MusicBrainz tag, a
+match that is only probable, missing artwork, incomplete tags, doubled tags,
+a duplicate, and a folder Jellyfin cannot see.
 
-| Réglage | Effet |
+| Setting | Effect |
 | --- | --- |
-| Analyse nocturne et heure | relance l'analyse chaque nuit à l'heure indiquée |
-| Pistes minimum par album | en dessous, le dossier est considéré comme des pistes isolées |
-| Score de confiance | seuil au-dessus duquel une proposition est présentée comme fiable |
-| Pochette intégrée / `cover.jpg` / `folder.jpg` | ce qui est écrit lors d'une correction |
-| AcoustID | empreinte audio, nécessite une clé d'API gratuite |
+| Nightly analysis and its hour | Re-runs the analysis every night at the given hour |
+| Minimum files per album | Below it, a folder counts as loose tracks rather than an album |
+| Confidence score | The score above which a proposal is presented as reliable |
+| Embedded artwork / `cover.jpg` / `folder.jpg` | What gets written when you fix an album |
+| AcoustID | Audio fingerprinting; needs a free API key |
 
-Le champ *Coller un MBID ou une URL MusicBrainz* accepte les deux formes. Une URL dit
-elle-même ce qu'elle désigne ; un identifiant seul est ambigu, alors Muzikk l'essaie comme
-groupe de parutions puis comme parution avant d'abandonner. Les résultats de recherche
-n'affichent pas de nombre de pistes : un groupe de parutions n'en a pas, le compte
-apparaît une fois l'édition choisie.
+The *Paste an MBID or a MusicBrainz URL* field accepts both forms. A URL
+says what it points at; a bare identifier is ambiguous, so Muzikk tries it
+as a release group then as a release before giving up. Search results do not
+show a track count: a release group has none, the count appears once the
+edition is chosen.
 
-Rien n'est écrit sans confirmation : chaque album se simule d'abord champ par champ,
-avant et après. Une fois les tags corrigés, le bouton *Réindexer Jellyfin* fait redécouvrir
-les dossiers que le serveur média avait ignorés.
+Nothing is written without confirmation: each album is simulated first, field
+by field, before and after. Once the tags are fixed, the *Reindex Jellyfin*
+button makes the server rediscover the folders it had ignored.
 
-### Import local
+### Local import
 
-Le cadre sous la recherche de l'accueil n'apparaît que si le compte a le droit *Peut
-importer un dossier*, réglable par utilisateur dans *Administration → Utilisateurs*. Les
-administrateurs déjà présents au moment de la mise à jour le reçoivent ; un compte créé
-ensuite reste sans ce droit tant qu'on ne l'active pas.
+The drop zone under the home search only appears if the account has the
+*Import a folder* right, granted per user in *Administration → Users*.
+Administrators already present when the feature landed received it; an
+account created later stays without it until you turn it on.
 
-Le navigateur envoie les fichiers au conteneur (un chemin Windows n'y est pas lisible).
-Après identification — liste MusicBrainz, MBID collé, ou tags saisis à la main — les
-pistes sont renommées comme un import Muzikk (`Artiste/Album (année)/01 Titre.ext`),
-taguées, et le dossier reçoit `cover.jpg` et `folder.jpg`. Si l'album est déjà possédé
-en lossless, l'import est refusé ; s'il n'existe qu'en lossy et que le dossier déposé
-est lossless, Muzikk propose de remplacer l'ancienne copie.
+The browser sends the files to the container (a Windows path is not readable
+there). After identification — a MusicBrainz list, a pasted MBID, or tags
+typed by hand — the tracks are renamed like any Muzikk import
+(`Artist/Album (year)/01 Title.ext`), tagged, and the folder receives
+`cover.jpg` and `folder.jpg`. If the album is already owned in lossless, the
+import is refused; if it only exists as lossy and the dropped folder is
+lossless, Muzikk offers to replace the old copy.
 
-L'anomalie *Tags en double* se traite comme les autres, par le filtre du même nom. Certains
-encodeurs ajoutent une valeur au lieu de la remplacer : le champ contient alors deux fois la
-même chose, ce que Picard montre en `Dushi; Dushi` et ce que les lecteurs affichent collé,
-`DushiDushi`. Un champ n'est signalé que s'il ne porte qu'une seule valeur, écrite plusieurs
-fois, majuscules ignorées. Dès que les valeurs diffèrent, rien n'est signalé même si l'une
-d'elles revient : un medley nomme ses parties une par une et peut créditer le même artiste sur
-la première et la dernière, une piste à plusieurs interprètes garde un identifiant par
-interprète. Ce sont des tags multivalués légitimes, et les signaler faisait remonter des albums
-sains.
+The *Doubled tags* anomaly is handled like the others, through the filter of
+the same name. Some encoders append a value instead of replacing it: the
+field then holds the same thing twice, which Picard shows as `Dushi; Dushi`
+and players display glued together, `DushiDushi`. A field is flagged only
+when it carries a single value, written several times, case ignored. As soon
+as the values differ, nothing is flagged even if one of them comes back: a
+medley names its parts one by one and may credit the same artist on the
+first and the last, a multi-artist track keeps one identifier per performer.
+Those are legitimate multi-value tags, and flagging them used to surface
+healthy albums.
 
-Les tags de la fenêtre de correction sont affichés comme le fait Picard, valeur par valeur :
-un bloc pour les tags de l'album, la liste des pistes en dessous, et chaque piste se déplie sur
-l'ensemble des tags lus dans son fichier. Une valeur écrite deux fois apparaît telle quelle,
-en orange, séparée par un point-virgule — c'est le seul affichage honnête, garder la première
-valeur revenait à masquer le problème. La simulation le montre aussi : un champ dont le texte
-est déjà le bon est quand même compté comme une modification, puisque la réécriture efface les
-tags avant de les recréer et fait donc disparaître le doublement. La correction reste album par
-album, avec la simulation puis la confirmation habituelles. Comme ces albums portent en général
-déjà leur identifiant MusicBrainz dans leurs tags, aucune recherche n'est nécessaire ; sans
-identifiant, identifiez d'abord l'album dans la fenêtre.
+Tags in the repair window are shown the way Picard shows them, value by
+value: a block for the album tags, the track list below, and each track
+expands to every tag read in its file. A value written twice appears as-is,
+in amber, separated by a semicolon — that is the only honest display,
+keeping the first value would hide the problem. The simulation shows it too:
+a field whose text is already correct still counts as a change, because the
+rewrite clears the tags before recreating them and therefore removes the
+doubling. Repair stays album by album, with the usual simulation then
+confirmation. Those albums usually already carry their MusicBrainz
+identifier in their tags, so no search is needed; without one, identify the
+album in the window first.
 
-Le bouton *Uniformiser les pochettes* ne touche pas aux tags et ne télécharge rien : il
-parcourt chaque dossier d'album pour qu'il contienne les deux noms de fichier attendus par
-les lecteurs. Si `cover` et `folder` sont déjà là, il passe. S'il n'y en a qu'un, il le
-recopie sous l'autre nom en gardant son extension : `folder.png` donne `cover.png`. S'il
-n'y en a aucun, la pochette embarquée dans les tags des pistes est extraite, convertie en
-JPEG à la taille configurée, puis écrite en `cover.jpg` et `folder.jpg`. Un dossier sans
-aucune pochette, ni fichier ni tag, est compté à part plutôt que rempli au hasard. Le
-passage est sans effet de bord : le relancer ne change plus rien. Contrairement à l'analyse,
-une seule piste suffit pour qu'un dossier soit traité.
+*Pair up the artwork files* does not touch tags and downloads nothing: it
+walks every album folder so it holds both file names players expect. If
+`cover` and `folder` are already there, it skips. If only one exists, it
+copies it under the other name, keeping the extension: `folder.png` yields
+`cover.png`. If neither exists, the artwork embedded in the track tags is
+extracted, converted to JPEG at the configured size, then written as
+`cover.jpg` and `folder.jpg`. A folder with no artwork at all, neither file
+nor tag, is counted separately rather than filled at random. The pass has no
+side effect: running it again changes nothing. Unlike the analysis, a single
+track is enough for a folder to be processed.
 
-Le bouton *Réparer les pochettes Jellyfin* s'attaque au problème inverse : les albums que
-Jellyfin affiche sans pochette alors qu'il y en a une sur le disque. Muzikk demande d'abord à
-Jellyfin de regarder à nouveau, album par album, ce qui suffit quand le fichier a été ajouté
-après le dernier scan. Pour ceux qui restent vides, il envoie l'image lui-même via
-`POST /Items/{id}/Images/Primary`, exactement ce que fait *Modifier les images* de l'interface :
-cette voie contourne les fournisseurs d'images et fonctionne donc même quand l'extracteur de
-pochettes embarquées est défaillant. L'image vient du dossier, puis des tags, puis de Cover Art
-Archive. Le rafraîchissement ne demande jamais le remplacement des images existantes : sur une
-bibliothèque musicale, cette option supprime les `cover.jpg` des dossiers
+*Repair the Jellyfin covers* attacks the inverse problem: albums Jellyfin
+shows without a cover while one sits on disk. Muzikk first asks Jellyfin to
+look again, album by album, which is enough when the file was added after
+the last scan. For those that stay empty, it uploads the image itself via
+`POST /Items/{id}/Images/Primary`, exactly what *Edit images* in the UI
+does: that path bypasses image providers and therefore works even when the
+embedded-cover extractor is broken. The image comes from the folder, then
+the tags, then the Cover Art Archive. The refresh never asks to replace
+existing images: on a music library that option deletes `cover.jpg` files
+from folders
 ([jellyfin#12629](https://github.com/jellyfin/jellyfin/issues/12629)).
 
-Deux détails d'implémentation valent d'être connus. Le corps de la requête d'envoi doit être
-l'image **encodée en base64** avec un type MIME explicite — un corps binaire ou un
-`Content-Type: image/*` renvoie `400 Incorrect ContentType` — et Muzikk retombe sur l'envoi
-binaire si une version future change d'avis. Par ailleurs Jellyfin met le rafraîchissement en
-file et répond immédiatement, donc Muzikk attend que la file se vide (20 s plus 0,4 s par album,
-7 minutes au maximum) avant de vérifier ce qui manque encore.
+Two implementation details are worth knowing. The upload body must be the
+image **encoded as base64** with an explicit MIME type — a binary body or a
+`Content-Type: image/*` returns `400 Incorrect ContentType` — and Muzikk
+falls back to a binary upload if a future version changes its mind. Jellyfin
+also queues the refresh and answers immediately, so Muzikk waits for the
+queue to drain (20 s plus 0.4 s per album, 7 minutes at most) before
+checking what is still missing.
 
-Le bouton *Aligner Jellyfin sur les tags* règle le symptôme le plus déroutant : des tags
-corrigés sur le disque que Jellyfin continue d'afficher faux. Jellyfin lit les tags d'un fichier
-la première fois qu'il le voit puis se fie à sa propre base ; son rafraîchissement par défaut ne
-comble que ce qui manque, donc un album nommé d'après un tag doublé garde ce nom indéfiniment.
-Une bibliothèque qui enregistre des fichiers NFO aggrave le cas, le mauvais nom resté dans
-`album.nfo` étant relu avant les tags.
+*Align Jellyfin on the tags* fixes the most confusing symptom: tags corrected
+on disk that Jellyfin keeps showing wrong. Jellyfin reads a file's tags the
+first time it sees it, then trusts its own database; its default refresh
+only fills what is missing, so an album named after a doubled tag keeps that
+name forever. A library that writes NFO files makes it worse: the bad name
+left in `album.nfo` is read before the tags.
 
-La passe compare donc les deux côtés — titre, artiste et année de l'album, titre et numéro de
-chaque piste — puis procède comme pour les pochettes : d'abord un rafraîchissement complet
-(`metadataRefreshMode=FullRefresh` et `replaceAllMetadata=true`, seul mode qui fait relire les
-fichiers), et pour ce qui résiste une écriture directe via `POST /Items/{id}`, c'est-à-dire ce
-que poste *Modifier les métadonnées* de l'interface : aucun fournisseur consulté, aucun NFO relu.
-L'écriture est un aller-retour lecture puis renvoi de l'élément complet, car cet appel applique
-tous les champs du corps et en effacerait donc ceux qu'on omettrait. Les images ne sont jamais
-touchées, pour la raison ci-dessus.
+The pass therefore compares both sides — album title, artist and year, plus
+every track title and number — then proceeds as for covers: first a full
+refresh (`metadataRefreshMode=FullRefresh` and `replaceAllMetadata=true`,
+the only mode that rereads the files), and for what resists a direct write
+via `POST /Items/{id}`, i.e. what *Edit metadata* in the UI posts: no
+provider consulted, no NFO reread. The write is a read-then-send of the
+whole item, because that call applies every field in the body and would
+therefore wipe any field you omit. Images are never touched, for the reason
+above.
 
-Le rafraîchissement n'est demandé qu'à l'essai, sur huit albums, et n'est étendu au reste que
-s'il en a corrigé au moins un. Sur un serveur qui l'ignore — c'est le cas dès qu'autre chose
-écrase les tags — l'insister coûterait une longue attente pour rien, et pire : un rafraîchissement
-qui se termine après notre écriture la défait. Le rapport le dit alors franchement, *relecture des
-fichiers ignorée par Jellyfin*, et la passe écrit directement.
+The refresh is tried first on eight albums, and only extended to the rest if
+it fixed at least one. On a server that ignores it — which happens as soon
+as something else overwrites the tags — insisting would cost a long wait
+for nothing, and worse: a refresh that finishes after our write undoes it.
+The report then says so plainly, *file reread ignored by Jellyfin*, and the
+pass writes directly.
 
-Les albums dont Jellyfin détient la valeur écrite deux fois passent en tête de file, avant ceux
-dont une année diverge simplement. Sans cela, une bibliothèque balayée par ordre alphabétique
-dépense tout son quota dans les premières lettres et laisse le défaut visible sous la lettre T
-attendre le passage suivant.
+Albums whose Jellyfin value is written twice go to the front of the queue,
+ahead of those whose year merely diverges. Without that, a library walked
+alphabetically spends its whole quota on the first letters and leaves the
+defect under the letter T waiting for the next pass.
 
-Le décalage est cherché deux fois, volontairement. La dernière analyse sert de filtre bon marché
-— elle contient déjà ce que déclare chaque dossier, donc repérer les suspects ne lit aucun
-fichier — puis les fichiers eux-mêmes sont relus et ont le dernier mot : une analyse plus ancienne
-que la dernière correction pousserait sinon des valeurs périmées dans Jellyfin. Un maximum de
-400 albums est traité par passage, pour ne pas transformer une bibliothèque très décalée en
-tempête d'appels ; un passage qui laisse des albums derrière lui met le suivant en file tout
-seul, jusqu'à huit fois, de quoi aligner la bibliothèque entière sans avoir à recliquer. La
-chaîne est bornée exprès : une valeur que Jellyfin refuserait de garder ne peut pas boucler
-indéfiniment.
+The mismatch is looked up twice on purpose. The last analysis is a cheap
+filter — it already holds what each folder declares, so spotting suspects
+reads no file — then the files themselves are reread and have the last
+word: an analysis older than the last correction would otherwise push stale
+values into Jellyfin. At most 400 albums are processed per pass, so a badly
+skewed library does not become a storm of calls; a pass that leaves albums
+behind enqueues the next one on its own, up to eight times, enough to align
+the whole library without clicking again. The chain is bounded on purpose:
+a value Jellyfin would refuse to keep cannot loop forever.
 
-La passe est aussi mise en file toute seule après chaque écriture de tags, pour l'album concerné
-uniquement : c'est ce qui évite d'avoir à y penser après une correction. Ce passage-là ne
-remplace pas le rapport affiché en haut de la page, qui reste celui du dernier passage complet.
+The pass is also enqueued on its own after every tag write, for that album
+only: that is what removes the need to think about it after a correction.
+That pass does not replace the report at the top of the page, which remains
+the last full one.
 
-L'analyse tourne dans le worker : elle continue si vous changez d'onglet ou fermez la page,
-et survit même à un redémarrage du conteneur, qui la remet en file.
+The analysis runs in the worker: it continues if you change tabs or close
+the page, and even survives a container restart, which requeues it.
 
-Chaque analyse laisse un rapport affiché en haut de la page : nombre de dossiers d'album
-trouvés, nombre retenus, puis le sort des autres — moins de pistes que le minimum, dossier
-illisible, tags illisibles. Le compteur *Albums analysés* rappelle en plus le nombre
-d'albums connus de Jellyfin, et `/config/logs/muzikk.log` nomme chaque dossier écarté.
+Each analysis leaves a report at the top of the page: album folders found,
+folders kept, then the fate of the others — fewer tracks than the minimum,
+unreadable folder, unreadable tags. The *Albums analysed* counter also
+recalls how many albums Jellyfin knows, and `/config/logs/muzikk.log` names
+every skipped folder.
 
-Chaque format est lu selon son conteneur : ID3 pour MP3, WAV et AIFF, atomes iTunes pour
-MP4, commentaires Vorbis pour FLAC, Ogg et Opus, et attributs WM pour les WMA. Le genre est
-signalé quand il manque mais ne suffit pas à déclarer un album incomplet, sinon presque
-toute une bibliothèque se retrouverait marquée.
+Each format is read according to its container: ID3 for MP3, WAV and AIFF,
+iTunes atoms for MP4, Vorbis comments for FLAC, Ogg and Opus, and WM
+attributes for WMA. Genre is reported when missing but is not enough to
+declare an album incomplete, otherwise almost a whole library would be
+flagged.
 
-Un dossier dont les tags résistent n'est jamais perdu : il est listé d'après son nom de
-dossier, marqué *sans identifiant* et *tags incomplets*, et sa fiche affiche l'erreur
-rencontrée. Le rapport donne en plus les premiers dossiers fautifs avec leur message, de
-quoi diagnostiquer sans ouvrir un terminal.
+A folder whose tags resist is never lost: it is listed from its folder
+name, marked *no identifier* and *incomplete tags*, and its sheet shows the
+error. The report also names the first offending folders with their
+message, enough to diagnose without opening a terminal.
 
-Si l'analyse ne trouve rien du tout, la page affiche la raison exacte renvoyée par le worker
-(dossier vide, volume non monté, droits insuffisants, minimum de pistes trop haut) : le
-chemin analysé est celui de *Nommage → Dossier de la bibliothèque*, qui doit pointer sur la
-bibliothèque réelle et pas seulement sur la destination des imports.
+If the analysis finds nothing at all, the page shows the exact reason
+returned by the worker (empty folder, volume not mounted, insufficient
+rights, track minimum too high): the path analysed is the one from
+*Naming → Library folder*, which must point at the real library and not
+only at the import destination.
 
-L'empreinte audio dépend de `fpcalc`, fourni par le paquet `libchromaprint-tools` de
-l'image. Si l'image a été construite avant cette fonctionnalité, reconstruisez-la.
+Audio fingerprinting depends on `fpcalc`, provided by the image's
+`libchromaprint-tools` package. If your image was built before that feature
+existed, rebuild it.
 
-### Lecteur
+### Player
 
-Active la lecture dans Muzikk. Cliquez sur une piste de la fiche album, ou sur un résultat
-de l'onglet *Pistes*, pour démarrer directement dessus ; la file d'attente reste accessible
-depuis le lecteur.
+Enables playback inside Muzikk. Click a track on an album page, or a result
+in the *Tracks* tab, to start on that track; the queue stays reachable from
+the player.
 
-Par défaut Muzikk lit le fichier directement dans le dossier de la bibliothèque, en
-retrouvant le chemin même si Jellyfin le voit sous un autre point de montage. C'est plus
-rapide et cela ne dépend d'aucune politique de lecture Jellyfin. Décochez *Lire les fichiers
-depuis le dossier de musique* si la bibliothèque n'est visible que par Jellyfin : le flux est
-alors relayé par l'API, le navigateur ne recevant jamais de jeton. Les formats exotiques
-(APE, DSF, WavPack) passent toujours par Jellyfin, qui les transcode.
+By default Muzikk reads the file straight from the library folder, resolving
+the path even when Jellyfin sees it under a different mount point. It is
+faster and depends on no Jellyfin playback policy. Untick *Read files from
+the music folder* if the library is only visible to Jellyfin: the stream is
+then relayed by the API, and the browser never receives a token. Exotic
+formats (APE, DSF, WavPack) always go through Jellyfin, which transcodes
+them.
 
-Le débit maximum, en bit/s, s'applique à ce relais ; `0` diffuse le fichier d'origine. Les
-écoutes peuvent être remontées à Jellyfin, sous le compte de l'auditeur — ce qui suppose
-qu'il s'est reconnecté à Muzikk depuis l'activation de la lecture, le temps que son jeton
-soit mémorisé.
+The maximum bitrate, in bits per second, applies to that relay; `0` streams
+the original file. Plays can be reported to Jellyfin under the listener's
+account, which assumes they have signed in to Muzikk since playback was
+enabled, so that their token has been stored.
 
-### Listes de lecture
+### Playlists
 
-L'onglet *Listes de lecture* montre celles du compte Jellyfin connecté. Une liste s'écoute
-depuis Muzikk, piste par piste ou d'un bloc, et se modifie : le bouton *Ajouter à une liste
-de lecture* apparaît sur la fiche d'un album — il y ajoute l'album entier, dans l'ordre des
-disques et des pistes — comme sur chaque résultat de l'onglet *Pistes* déjà possédé. Le
-détail d'une liste permet d'en retirer une piste, et de supprimer la liste si Jellyfin
-autorise l'auditeur à le faire.
+The *Playlists* tab shows those of the signed-in Jellyfin account. A list
+plays from Muzikk, track by track or as a whole, and can be edited: *Add to
+a playlist* appears on an album page — it adds the whole album, in disc and
+track order — and on every already-owned result in the *Tracks* tab. The
+detail of a list lets you remove a track, and delete the list if Jellyfin
+allows the listener to do so.
 
-Tout passe par le jeton de l'auditeur, jamais par la clé API du serveur : une liste
-appartient à un compte, et la clé les rangerait toutes sous celui qui la détient. Une liste
-créée depuis Muzikk est donc une liste Jellyfin ordinaire, visible dans tous les clients.
-Le message *Aucune session Jellyfin pour ce compte* signifie simplement que le jeton n'a pas
-été mémorisé : il suffit de se déconnecter puis de se reconnecter à Muzikk.
+Everything goes through the listener's token, never the server API key: a
+list belongs to an account, and the key would file them all under whoever
+holds it. A list created from Muzikk is therefore an ordinary Jellyfin
+playlist, visible in every client. The message *No Jellyfin session for this
+account* simply means the token was not stored: sign out and back in to
+Muzikk.
 
-### Écouter un morceau qu'on ne possède pas
+### Hearing a track you do not own
 
-Sur la fiche d'un album absent de la musicothèque, cliquer sur une piste en joue un extrait
-de trente secondes ; même chose sur les résultats non possédés de l'onglet *Pistes*, via le
-bouton casque de la pochette. Le lecteur affiche alors la pastille *Extrait 30 s*, et l'écoute
-n'est pas remontée à Jellyfin : il n'y a aucun morceau de la bibliothèque derrière.
+On the page of an album missing from the library, clicking a track plays a
+thirty-second preview; the same on unowned results in the *Tracks* tab, via
+the headphone button on the cover. The player then shows the *30 s preview*
+chip, and the play is not reported to Jellyfin: there is no library track
+behind it.
 
-L'extrait vient de Deezer, dont la recherche publique ne demande aucune clé et renvoie un MP3,
-et d'iTunes en repli. Chaque réponse est comparée à l'artiste et au titre demandés : une
-version karaoké ou un groupe hommage, qui répondent parfaitement sur le titre, sont écartés
-sur l'artiste. Quand aucun des deux services ne propose quelque chose de convaincant, Muzikk
-le dit plutôt que de jouer autre chose.
+The preview comes from Deezer, whose public search needs no key and returns
+an MP3, and from iTunes as a fallback. Each response is compared to the
+requested artist and title: a karaoke version or a tribute band that match
+the title perfectly are dropped on the artist. When neither service offers
+something convincing, Muzikk says so rather than playing something else.
 
-Le son est relayé par l'API, comme celui de la bibliothèque : le navigateur ne contacte ni
-Deezer ni Apple, et la pochette montrée reste celle que Muzikk affichait déjà. Décochez
-*Proposer des extraits de 30 secondes* dans les réglages du lecteur pour que le serveur ne
-sorte plus du tout vers ces deux services.
+The audio is relayed by the API, like the library: the browser contacts
+neither Deezer nor Apple, and the cover shown remains the one Muzikk already
+displayed. Untick *Offer thirty second extracts* in the player settings so
+the server no longer talks to those two services at all.
 
-## Modèle de nommage
+## Naming template
 
-Le modèle par défaut reproduit le script Picard demandé :
+The default template reproduces the usual Picard script:
 
 ```
 {albumartist}/{album} ({year})/{disc_prefix}{track:02} {artist_prefix}{title}
 ```
 
-donnant `Daft Punk/Discovery (2001)/03 Digital Love.flac`.
+which gives `Daft Punk/Discovery (2001)/03 Digital Love.flac`.
 
-| Variable | Valeur |
+| Variable | Value |
 | --- | --- |
-| `{albumartist}` `{artist}` | artiste de l'album / de la piste |
-| `{album}` `{title}` | titre de l'album / de la piste |
-| `{year}` `{date}` | année, date complète de sortie |
-| `{track}` `{disc}` `{totaldiscs}` | numéros ; `{track:02}` pour deux chiffres |
-| `{disc_prefix}` | vide sur un disque unique, `1-` sinon, `01-` au-delà de neuf disques |
-| `{artist_prefix}` | vide, sauf sur un album multi-artistes où il vaut `Artiste - ` |
-| `{ext}` | extension du fichier, ajoutée automatiquement si absente |
+| `{albumartist}` `{artist}` | Album artist / track artist |
+| `{album}` `{title}` | Album title / track title |
+| `{year}` `{date}` | Year, full release date |
+| `{track}` `{disc}` `{totaldiscs}` | Numbers; `{track:02}` pads to two digits |
+| `{disc_prefix}` | Empty on a single disc, `1-` otherwise, `01-` beyond nine discs |
+| `{artist_prefix}` | Empty, except on a multi-artist album where it becomes `Artist - ` |
+| `{ext}` | File extension, appended automatically when absent |
 
-L'aperçu se met à jour en direct pendant l'édition, sur trois exemples représentatifs
-(album simple, coffret multi-disques, compilation).
+The preview updates as you type, on three representative examples: a plain
+album, a multi-disc box set and a compilation.
 
-> Les téléchargements Soulseek sont liés en dur puis étiquetés sur place. Les torrents
-> sont **copiés** avant tagging : réécrire les tags d'un fichier en cours de seed le
-> corromprait aux yeux du tracker.
+> Soulseek downloads are hardlinked then tagged in place. Torrents are
+> **copied** before tagging: rewriting the tags of a file still being seeded
+> would corrupt it in the tracker's eyes.
 
-## Comment fonctionne l'acquisition
+## How acquisition works
 
 ```
-demande → (approbation) → recherche → candidat retenu → téléchargement
-        → vérification → tagging → import → rescan Jellyfin
+request → (approval) → search → candidate chosen → download
+        → verification → tagging → import → Jellyfin rescan
 ```
 
-Avant toute recherche, Muzikk inspecte le dossier de téléchargement de slskd : si l'album
-s'y trouve déjà en entier, il est importé directement, sans repasser par le réseau. Le
-dossier candidat est noté exactement comme un candidat distant — format, nombre de pistes,
-titres, taille par piste — donc un téléchargement partiel ou un autre album ne peut pas
-être pris par erreur. C'est ce qui évite de re-télécharger un album quand un import a
-échoué pour une raison de configuration.
+Before searching anything, Muzikk inspects the slskd download folder: if the
+album already sits there complete, it is imported directly, without going
+back to the network. That candidate folder is scored exactly like a remote
+one — format, track count, titles, size per track — so a partial download or
+a different album cannot be picked up by mistake. This is what avoids
+re-downloading an album whose import failed for a configuration reason.
 
-Ensuite, pour chaque provider, dans l'ordre configuré :
+Then, for each provider, in the configured order:
 
-1. Recherche à partir de l'artiste, du titre normalisé, de l'année et du nombre de pistes.
-   Jusqu'à quatre variantes du terme sont essayées, chacune laissant tomber quelque chose
-   que le pair n'a peut-être pas écrit : d'abord le type de sortie — Soulseek ne répond que
-   si **tous** les mots figurent dans le chemin, donc chercher « Pharaoh EP » ne trouve
-   jamais un dossier nommé « Eekoz - Pharaoh » — puis les mentions d'édition. Le titre seul,
-   sans l'artiste, passe en dernier : c'est le seul terme qui ramène des centaines de
-   dossiers sans rapport, et le demander tôt saturait la liste de candidats avant que les
-   termes nommant l'artiste aient eu leur tour.
-2. Notation de chaque candidat : similarité artiste et titre (`rapidfuzz` après
-   suppression des accents, de la ponctuation et des mentions « deluxe », « remaster »…),
-   correspondance du nombre de pistes, couverture des titres de pistes, format détecté,
-   cohérence de la taille par piste, seeders ou vitesse du pair.
-3. Pour les torrents, le `.torrent` est téléchargé et **sa liste de fichiers est lue
-   avant l'ajout** à qBittorrent. Pour slskd, les résultats sont regroupés par dossier
-   distant, et un dossier ne contenant qu'un seul fichier audio est écarté — une piste
-   isolée qui porte le nom de l'album n'est pas l'album. Sauf pour un single : quand
-   MusicBrainz annonce une seule piste, un seul fichier suffit, sinon la sortie était
-   jetée avant même d'être notée.
-4. Le meilleur candidat au-dessus du seuil est mis en file ; sinon on passe au provider
-   suivant. Si tous échouent, la demande passe en échec et sera relancée automatiquement.
+1. Search from the artist, the normalised title, the year and the track
+   count. Up to four wordings are tried, each dropping something the peer
+   may not have written: the release type first — Soulseek only answers when
+   **every** word appears in the path, so searching "Pharaoh EP" never finds
+   a folder named "Eekoz - Pharaoh" — then edition mentions. The bare title,
+   without the artist, goes last: it is the only wording that returns
+   hundreds of unrelated folders, and asking it early used to fill the
+   candidate list before the wordings that name the artist had their turn.
+2. Score each candidate: artist and title similarity with `rapidfuzz`, after
+   stripping accents, punctuation and mentions like "deluxe" or "remaster";
+   track count match; track title coverage; detected format; consistency of
+   the size per track; seeders or peer speed.
+3. For torrents the `.torrent` is fetched and **its file list is read
+   before** it is handed to qBittorrent. For slskd, results are grouped per
+   remote folder, and a folder holding a single audio file is discarded —
+   an isolated track named after the album is not the album. Unless
+   MusicBrainz says the release has one track, in which case one file is
+   enough; otherwise the release was thrown away before it was even scored.
+4. The best candidate above the threshold is queued; otherwise Muzikk moves
+   to the next provider. If they all fail, the request is marked failed and
+   retried later on its own.
 
-Le journal de chaque demande conserve tous les candidats évalués avec leur score et le
-motif de rejet, visible depuis la page **Demandes**.
+Each request keeps every candidate it evaluated, with its score and the
+reason it was rejected, readable from the **Requests** page.
 
-Trois actions de masse sont disponibles en haut de cette page, chacune traitant toute la
-liste concernée et pas seulement les lignes affichées : vider les demandes importées,
-vider les demandes en échec, annuler les demandes actives. Une annulation n'interrompt
-pas le transfert à l'instant même : le pipeline s'en aperçoit à sa prochaine mesure de
-progression et abandonne alors le téléchargement en cours.
+Three bulk actions sit at the top of that page, each acting on the whole
+matching list rather than the rows on screen: clear imported requests, clear
+failed ones, cancel the active ones. A cancel does not stop the transfer at
+that instant: the pipeline notices at its next progress check and then
+abandons the download in progress.
 
-### Valider une amélioration avant de supprimer l'ancienne version
+### Approving an upgrade before the old version is deleted
 
-Une amélioration atterrit presque toujours dans le dossier qu'elle améliore : le schéma
-de nommage donne le même artiste, le même album et la même année. Les anciens MP3 et les
-nouveaux FLAC se retrouvent donc côte à côte dans un seul dossier — que supprimer le
-dossier entier était justement refusé de faire, puisqu'il contient désormais les nouveaux
-fichiers. Résultat : les anciens fichiers survivaient, et Jellyfin affichait chaque piste
-deux fois.
+An upgrade almost always lands in the very folder it improves, since the
+naming scheme yields the same artist, album and year. The old MP3s and the
+new FLACs end up side by side in one folder, which is exactly what makes
+deleting that folder unsafe.
 
-Désormais, à la fin de l'import d'une amélioration, Muzikk relève les deux versions
-fichier par fichier — format, résolution, débit, durée, taille — et met la demande en
-statut **À valider** sans rien supprimer. Le demandeur ou un administrateur ouvre la
-demande, compare les deux colonnes, puis choisit :
+So at the end of an upgrade import, Muzikk records both versions file by
+file — format, resolution, bitrate, duration, size — and puts the request in
+the **To approve** state without deleting anything. The requester or an
+administrator opens it, compares the two columns, then chooses:
 
-- **Valider** supprime les anciens fichiers audio uniquement, en gardant la pochette du
-  dossier et les pistes qui viennent d'être écrites. Si le nouveau dossier est ailleurs,
-  l'ancien est supprimé en entier.
-- **Refuser** fait l'inverse : les fichiers fraîchement importés sont supprimés et
-  l'ancienne version reste en place. Seule la pochette du dossier, réécrite à l'import,
-  ne peut pas être restaurée.
+- **Approve** deletes the old audio files only, keeping the folder artwork
+  and the tracks that were just written. If the new folder is elsewhere, the
+  old one goes entirely.
+- **Reject** does the opposite: the freshly imported files are removed and
+  the old version stays. Only the folder artwork, rewritten on import,
+  cannot be restored.
 
-Le relevé des anciens fichiers est pris **avant** de placer les nouveaux, sans quoi un
-fichier de même nom et même extension serait écrasé avec la preuve de ce qu'il était. Un
-fichier ainsi remplacé n'est jamais proposé à la suppression : il contient déjà la
-nouvelle version.
+The record of the old files is taken **before** the new ones are placed,
+otherwise a file of the same name and extension would be overwritten along
+with the proof of what it was. A file replaced that way is never offered
+for deletion: it already holds the new version.
 
-Le réglage *Demander une validation avant de supprimer l'ancienne version* (section
-Nommage) désactive cette étape : la suppression redevient immédiate, mais elle porte
-maintenant aussi sur les anciens fichiers d'un dossier partagé, ce qu'elle ne faisait
-pas. Et *Supprimer l'ancienne version après une amélioration* continue, s'il est
-désactivé, à tout conserver sans rien demander.
+The setting *Ask for a validation before deleting the old copy* (Naming
+section) turns this step off and makes the deletion immediate again, now
+also covering the old files of a shared folder, which it did not before.
+And *Delete the old copy after an upgrade*, if turned off, still keeps
+everything without asking.
 
-### Suivre un artiste sans rien télécharger
+### Following an artist without downloading anything
 
-Suivre un artiste ne déclenche aucun téléchargement. La vérification périodique compare
-sa discographie MusicBrainz à la musicothèque et écrit ce qui manque ; l'onglet **Suivi**
-l'affiche, et chaque album attend un clic. C'est un choix délibéré : télécharger d'office
-les nouveautés de quelques dizaines d'artistes suivis remplit le disque de disques que
-personne n'a demandés.
+Following an artist triggers no download. The periodic check compares their
+MusicBrainz discography to the library and records what is missing; the
+**Watchlist** tab shows it, and every album waits for a click. That is
+deliberate: auto-downloading the new releases of a few dozen followed
+artists fills the disk with records nobody asked for.
 
-Chaque artiste suivi a sa propre portée, réglable sur sa ligne :
+Each followed artist has its own scope, set on its row:
 
-- **Nouveautés** ne montre que les sorties de moins de 400 jours.
-- **Discographie** montre tout ce qui manque, quelle que soit l'année.
+- **New releases** shows only the last 400 days.
+- **Discography** shows everything missing, regardless of year.
 
-Albums, EP et singles comptent dans les deux cas, une pastille sur la pochette rappelant
-de quoi il s'agit quand ce n'est pas un album. Les compilations, albums live, remixes et
-autres types secondaires sont écartés : on suit un artiste pour sa discographie, pas pour
-ses rééditions. Changer la portée relance une vérification, puisque la liste en dépend.
+Albums, EPs and singles count in both cases, a chip on the cover reminding
+you what it is when it is not an album. Compilations, live albums, remixes
+and other secondary types are left out: you follow an artist for their
+discography, not their reissues. Changing the scope reruns a check, since
+the list depends on it.
 
-La liste se filtre par artiste, ou sur les seules nouveautés. L'œil barré sur une
-pochette met l'album de côté : il passe dans *Ignorés* et n'en ressort que si vous le
-restaurez, même après une nouvelle vérification. Un album disparaît de lui-même quand la
-musicothèque finit par le contenir.
+The list can be filtered by artist, or to new releases only. The crossed-out
+eye on a cover sets the album aside: it moves to *Ignored* and only comes
+back if you restore it, even after a new check. An album disappears on its
+own once the library contains it.
 
-La **wishlist** reste une liste tenue à la main, alimentée par le bouton *Ajouter à la
-wishlist* d'une fiche album. Elle ne relance plus rien automatiquement : le bouton
-*Vérifier* solde simplement les entrées que la musicothèque contient désormais, et chaque
-ligne garde son propre bouton de demande.
+The **wishlist** remains a hand-kept list, fed by the *Add to wishlist*
+button on an album page. It no longer retries anything on its own: *Check*
+simply clears the entries the library now holds, and each row keeps its own
+request button.
 
-## Variables d'environnement
+## Environment variables
 
-Seules l'infrastructure et les chemins passent par l'environnement ; tout le reste se
-configure dans l'interface.
+Only infrastructure and paths go through the environment; everything else is
+configured in the interface.
 
-| Variable | Défaut | Rôle |
+| Variable | Default | Role |
 | --- | --- | --- |
-| `PUID` / `PGID` | `1000` | Propriétaire des fichiers écrits, doit correspondre à la bibliothèque |
-| `UMASK` | `002` | Masque appliqué aux fichiers importés |
-| `TZ` | `Europe/Paris` | Fuseau horaire du conteneur |
-| `MUZIKK_PORT` | `8383` | Port HTTP |
-| `MUZIKK_CONFIG_DIR` | `/config` | Base, clés, cache, logs |
-| `MUZIKK_STATIC_DIR` | `/app/static` | SPA compilé |
+| `PUID` / `PGID` | `1000` | Owner of the files Muzikk writes; must match the library |
+| `UMASK` | `002` | Mask applied to imported files |
+| `TZ` | `Europe/Paris` | Container time zone |
+| `MUZIKK_PORT` | `8383` | HTTP port |
+| `MUZIKK_CONFIG_DIR` | `/config` | Database, keys, cache, logs |
+| `MUZIKK_STATIC_DIR` | `/app/static` | The compiled interface |
 | `MUZIKK_LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING` |
-| `MUZIKK_WORKER_CONCURRENCY` | `2` | Travaux traités en parallèle (1 à 8) |
-| `MUZIKK_SESSION_HOURS` | `336` | Durée de validité d'une session |
+| `MUZIKK_WORKER_CONCURRENCY` | `2` | Jobs handled in parallel, 1 to 8 |
+| `MUZIKK_SESSION_HOURS` | `336` | How long a session stays valid |
 
-Côté `docker-compose`, `MUSIC_LIBRARY` et `DOWNLOADS_ROOT` désignent les chemins **hôte**,
-`MUSIC_LIBRARY_CONTAINER` et `DOWNLOADS_CONTAINER` les chemins correspondants **dans le
-conteneur**.
+In the compose file, `MUSIC_LIBRARY` and `DOWNLOADS_ROOT` are the **host**
+paths, `MUSIC_LIBRARY_CONTAINER` and `DOWNLOADS_CONTAINER` the matching paths
+**inside the container**.
 
-## Développement
+## Development
 
-Backend :
+Backend:
 
 ```bash
 python -m venv .venv
@@ -656,79 +678,83 @@ python -m venv .venv
 MUZIKK_CONFIG_DIR=./config .venv/bin/uvicorn muzikk.main:app --reload --app-dir backend --port 8383
 ```
 
-Frontend :
+Frontend:
 
 ```bash
 cd frontend
 npm install
-npm run dev          # http://localhost:5173, /api est relayé vers le port 8383
+npm run dev          # http://localhost:5173, /api is proxied to port 8383
 ```
 
-Contrôles rapides, sans Node ni Docker :
+Quick checks, without Node or Docker:
 
 ```bash
-.venv/bin/python -m ruff check backend      # lint
-.venv/bin/python backend/smoke_test.py      # démarrage, routes et gardes d'authentification
-.venv/bin/python backend/pipeline_test.py   # nommage, matching, association fichiers/pistes
-.venv/bin/python backend/artwork_test.py    # résolution des pochettes
-.venv/bin/python backend/metadata_test.py   # analyse de la bibliothèque et lecture des tags
-.venv/bin/python backend/local_import_test.py # import d'un dossier local, tags et nommage
-.venv/bin/python backend/playback_test.py   # localisation des fichiers et requêtes Range
-.venv/bin/python frontend/check_frontend.py # imports et clés de traduction
+.venv/bin/python -m ruff check backend        # lint
+.venv/bin/python backend/smoke_test.py        # startup, routes and auth guards
+.venv/bin/python backend/pipeline_test.py     # naming, matching, file/track pairing
+.venv/bin/python backend/artwork_test.py      # artwork resolution
+.venv/bin/python backend/metadata_test.py     # library analysis and tag reading
+.venv/bin/python backend/local_import_test.py # local folder import
+.venv/bin/python backend/playback_test.py     # file lookup and Range requests
+.venv/bin/python frontend/check_frontend.py   # imports and translation keys
 ```
 
-Une migration Alembic se génère avec :
+An Alembic migration is generated with:
 
 ```bash
 cd backend && alembic revision --autogenerate -m "description"
 ```
 
-Les migrations sont appliquées automatiquement au démarrage ; sur une base vierge, le
-schéma est créé puis marqué à la dernière révision.
+Migrations are applied automatically at startup. On an empty database the
+schema is created and then stamped at the latest revision.
 
-## Dépannage
+## Troubleshooting
 
-**« La recherche ne renvoie rien »** — l'instance MusicBrainz locale n'a probablement pas
-Solr. Le test de connexion l'indique explicitement. Activez le repli public en attendant.
+**"Search returns nothing"** — the local MusicBrainz instance most likely has
+no Solr. The connection test says so explicitly. Enable the public fallback
+in the meantime.
 
-**« Aucun candidat n'est accepté »** — ouvrez la demande : chaque candidat évalué affiche
-son score et son motif de rejet. Les causes fréquentes sont un nombre de pistes différent
-(édition MusicBrainz mal choisie : forcez une autre édition depuis la fiche album), un
-score trop juste (baissez le seuil dans *Qualité*) ou un manque de seeders.
+**"No candidate is ever accepted"** — open the request: every candidate
+evaluated shows its score and the reason it was rejected. The usual causes
+are a different track count — the wrong MusicBrainz edition was picked, so
+force another one from the album page — a score that is just too low, so
+lower the threshold in *Quality*, or not enough seeders.
 
-**« Le même album est téléchargé en boucle »** — le journal de la demande contient alors
-`the downloaded files could not be located on disk`. slskd a bien récupéré l'album, mais
-Muzikk ne retrouve pas les fichiers et considère le candidat comme raté. Corrigez le
-**dossier de téléchargement** de la section slskd (voir plus haut) puis relancez la
-demande : les fichiers déjà présents seront importés sans être retéléchargés. Muzikk
-arrête désormais immédiatement la demande dans ce cas au lieu d'essayer les candidats
-suivants, et ne programme pas de nouvelle tentative automatique tant que la configuration
-n'a pas été corrigée.
+**"The same album is downloaded over and over"** — the request log then
+contains `the downloaded files could not be located on disk`. slskd did
+fetch the album, but Muzikk cannot find the files and treats the candidate
+as a failure. Fix the **download folder** in the slskd section (see above)
+and retry the request: the files already there are imported without being
+downloaded again. Muzikk now stops the request immediately in this case
+rather than trying the next candidates, and schedules no automatic retry
+until the configuration is corrected.
 
-**« Les fichiers sont copiés au lieu d'être liés »** — les chemins `/downloads` et
-`/music` doivent être sur le **même système de fichiers** et montés au même endroit dans
-tous les conteneurs. Un montage réseau distinct force la copie.
+**"Files are copied instead of hardlinked"** — the `/downloads` and `/music`
+paths must be on the **same filesystem** and mounted at the same location in
+every container. A separate network mount forces a copy.
 
-**« Jellyfin ne voit pas les nouveaux albums »** — vérifiez `PUID`/`PGID` et `UMASK` :
-Jellyfin doit pouvoir lire les fichiers. Le rescan automatique peut aussi être désactivé
-dans les réglages Jellyfin de Muzikk. Si un dossier reste invisible malgré un rescan, il
-apparaît dans *Métadonnées* sous « Absent de Jellyfin » : c'est presque toujours un album
-sans tag `album` ou `albumartist`, que le serveur média ne sait pas classer. Corrigez les
-tags depuis cette page puis relancez la réindexation. Le rapprochement essaie le chemin
-exact, puis les deux derniers segments du chemin, puis l'identifiant MusicBrainz — Jellyfin
-peut donc renommer un album sans le faire disparaître — et le nom en dernier recours.
+**"Jellyfin does not see the new albums"** — check `PUID`/`PGID` and
+`UMASK`: Jellyfin has to be able to read the files. The automatic rescan can
+also be turned off in the Jellyfin settings. If a folder stays invisible
+despite a rescan, it appears in *Metadata* under "Missing from Jellyfin" —
+almost always an album without an `album` or `albumartist` tag, which the
+media server cannot classify. Fix the tags from that page, then reindex.
+Matching tries the exact path, then the last two path segments, then the
+MusicBrainz identifier — so Jellyfin can rename an album without losing it
+— and the name as a last resort.
 
-**« La lecture ne démarre pas »** — le lecteur affiche désormais le motif exact renvoyé par
-le serveur à côté de « Lecture impossible ». La section *Lecteur* doit être activée et, si la
-lecture directe est désactivée, Jellyfin joignable depuis le conteneur. Un compte connecté
-avant l'activation de la lecture n'a pas encore de jeton mémorisé : la lecture retombe sur
-la clé d'API du serveur et l'écoute n'est pas créditée, une reconnexion suffit.
+**"Playback does not start"** — the player now shows the exact reason
+returned by the server next to "Cannot play". The *Player* section must be
+enabled and, if direct access is off, Jellyfin has to be reachable from the
+container. An account that signed in before playback was enabled has no
+stored token yet, so the play falls back to the server API key and is not
+credited; signing out and back in is enough.
 
-**« Je ne peux pas me connecter »** — Muzikk ne stocke aucun mot de passe : l'échec vient
-de Jellyfin. Vérifiez que l'utilisateur est actif dans Muzikk (*Administration →
-Utilisateurs*) et que la clé d'API Jellyfin est toujours valide.
+**"I cannot sign in"** — Muzikk stores no password, so the failure comes
+from Jellyfin. Check that the user is active in Muzikk under
+*Administration → Users*, and that the Jellyfin API key is still valid.
 
-Les journaux détaillés se trouvent dans `/config/logs/muzikk.log` et dans
-`docker compose logs -f muzikk`. Les deux reçoivent la même chose ; une version antérieure
-laissait Alembic reprendre la configuration des journaux au démarrage, ce qui arrêtait
-l'écriture du fichier juste après les migrations.
+Detailed logs live in `/config/logs/muzikk.log` and in
+`docker compose logs -f muzikk`. Both receive the same thing; an earlier
+version let Alembic take over the logging configuration at startup, which
+stopped writing the file right after the migrations.
