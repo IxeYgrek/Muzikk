@@ -251,6 +251,7 @@ export function SettingsFields({
     <div className="grid gap-x-5 gap-y-4 sm:grid-cols-2">
       {fields.map((spec) => {
         const label = t(`fields.${section}.${spec.key}`, spec.key)
+        const extraHint = t(`fields.${section}.${spec.key}Hint`, { defaultValue: '' })
         const value = values[spec.key]
         const className = spec.full ? 'sm:col-span-2' : undefined
 
@@ -286,7 +287,12 @@ export function SettingsFields({
         if (spec.type === 'list' || spec.type === 'numberList') {
           const text = Array.isArray(value) ? value.join(', ') : ''
           return (
-            <Field key={spec.key} label={label} className={className} hint={t('common.optional')}>
+            <Field
+              key={spec.key}
+              label={label}
+              className={className}
+              hint={extraHint || t('common.optional')}
+            >
               <Input
                 value={text}
                 placeholder={spec.placeholder}
@@ -312,7 +318,9 @@ export function SettingsFields({
             key={spec.key}
             label={label}
             className={className}
-            hint={spec.type === 'password' ? t('admin.secretKept') : undefined}
+            hint={
+              extraHint || (spec.type === 'password' ? t('admin.secretKept') : undefined)
+            }
           >
             <Input
               type={spec.type === 'password' ? 'password' : spec.type === 'number' ? 'number' : 'text'}

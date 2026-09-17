@@ -16,6 +16,7 @@ return [
     'github_url' => 'https://github.com/IxeYgrek/Muzikk',
     'docker_hub_url' => 'https://hub.docker.com/r/ixeygrek/muzikk',
     'docker_image' => 'ixeygrek/muzikk',
+    'discord_url' => 'https://discord.gg/rKE8hGXwY2',
 
     // Languages the site ships with, keyed by their folder name under lang/.
     // Adding an entry is all it takes: the selector appears by itself as soon

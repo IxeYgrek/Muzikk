@@ -69,6 +69,18 @@
     color: var(--ink-50);
 }
 
+.btn--discord {
+    background: rgba(88, 101, 242, 0.12);
+    border-color: rgba(88, 101, 242, 0.55);
+    color: var(--discord-soft);
+}
+
+.btn--discord:hover {
+    background: rgba(88, 101, 242, 0.28);
+    border-color: var(--discord);
+    color: #fff;
+}
+
 .btn--ghost {
     background: transparent;
     color: var(--ink-300);

@@ -92,6 +92,13 @@ function docker_hub_url(): ?string
     return $url === '' ? null : $url;
 }
 
+/** The Discord support server, or null while it is not published yet. */
+function discord_url(): ?string
+{
+    $url = trim((string) config('discord_url'));
+    return $url === '' ? null : $url;
+}
+
 /** Image name on Docker Hub, without a tag. */
 function docker_image(): string
 {

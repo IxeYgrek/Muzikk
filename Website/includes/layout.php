@@ -31,6 +31,7 @@ function page_start(array $options = []): void
     $description = $options['description'] ?? t('common.description');
     $bodyClass = $options['class'] ?? '';
     $repository = repository_url();
+    $discord = discord_url();
     ?>
 <!DOCTYPE html>
 <html lang="<?= e(html_lang()) ?>">
@@ -50,9 +51,7 @@ function page_start(array $options = []): void
     <meta property="og:url" content="<?= e(canonical_url()) ?>">
     <meta property="og:image" content="<?= e(asset('assets/img/social-card.svg')) ?>">
     <meta name="twitter:card" content="summary_large_image">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap">
+    <link rel="stylesheet" href="<?= e(asset('assets/css/fonts.css')) ?>">
     <link rel="stylesheet" href="<?= e(asset('assets/css/base.css')) ?>">
     <link rel="stylesheet" href="<?= e(asset('assets/css/components.css')) ?>">
     <link rel="stylesheet" href="<?= e(asset('assets/css/pages.css')) ?>">
@@ -89,6 +88,11 @@ function page_start(array $options = []): void
 
             <div class="site-nav__actions">
                 <?= language_selector() ?>
+                <?php if ($discord !== null): ?>
+                    <a class="btn btn--discord btn--sm" href="<?= e($discord) ?>" rel="noopener noreferrer" target="_blank">
+                        <?= icon('discord') ?><span><?= t('common.support') ?></span>
+                    </a>
+                <?php endif; ?>
                 <?php if ($repository !== null): ?>
                     <a class="btn btn--secondary btn--sm" href="<?= e($repository) ?>" rel="noopener noreferrer" target="_blank">
                         <?= icon('github') ?><span><?= t('common.github') ?></span>

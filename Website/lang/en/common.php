@@ -15,6 +15,7 @@ return [
     'apply' => 'Apply',
     'github' => 'GitHub',
     'dockerHub' => 'Docker Hub',
+    'support' => 'Support',
 
     'nav' => [
         'primary' => 'Primary navigation',

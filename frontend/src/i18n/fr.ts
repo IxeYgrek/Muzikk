@@ -590,8 +590,8 @@ export const fr = {
     userAutoApprove: 'Approbation automatique',
     userAutoApproveHint: 'Sauter la file de modération pour les demandes de cet utilisateur.',
     userAutoApproveInherit: 'Réglage global',
-    userQuota: 'Quota hebdomadaire',
-    quotaUnlimited: '0 = illimité',
+    userQuota: 'Quota hebdomadaire (albums)',
+    quotaUnlimited: 'Nombre de demandes d’albums sur 7 jours, pas une taille en Go. 0 = illimité.',
     jobs: 'Tâches',
     jobRun: 'Lancer',
     purgeCovers: 'Vider le cache des pochettes',
@@ -613,7 +613,9 @@ export const fr = {
       default_language: 'Langue par défaut',
       require_approval: 'Approbation administrateur requise',
       admins_bypass_approval: 'Les administrateurs sont approuvés automatiquement',
-      default_weekly_quota: 'Quota hebdomadaire par défaut',
+      default_weekly_quota: 'Quota hebdomadaire par défaut (albums)',
+      default_weekly_quotaHint:
+        'Nombre de demandes d’albums qu’un nouveau compte peut faire sur 7 jours, pas une taille en Go. 0 = illimité. Les administrateurs ne sont pas concernés.',
       retry_failed_after_hours: 'Délai avant nouvelle tentative (heures)',
       max_retry_attempts: 'Nombre maximum de tentatives',
       library_scan_interval_minutes: 'Intervalle d’indexation de la musicothèque (minutes)',
@@ -786,7 +788,7 @@ export const fr = {
     generic: 'Une erreur est survenue',
     unauthorized: 'Session expirée, reconnectez-vous',
     forbidden: 'Accès refusé',
-    quota: 'Quota de demandes atteint',
+    quota: 'Quota hebdomadaire atteint (nombre d’albums demandés)',
   },
 }
 
