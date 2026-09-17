@@ -1,0 +1,36 @@
+services:
+  muzikk:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    # Published image. `docker compose pull` fetches it; `up --build` rebuilds
+    # from this directory instead.
+    image: ixeygrek/muzikk:latest
+    container_name: muzikk
+    restart: unless-stopped
+    environment:
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+      UMASK: ${UMASK:-002}
+      TZ: ${TZ:-Europe/Paris}
+      MUZIKK_PORT: 8383
+      MUZIKK_LOG_LEVEL: ${MUZIKK_LOG_LEVEL:-INFO}
+    ports:
+      - "${MUZIKK_PORT:-8383}:8383"
+    volumes:
+      - ${MUZIKK_CONFIG:-./config}:/config
+      # The music library. Mount it on the path Jellyfin itself reports, so that
+      # Muzikk can resolve the albums returned by the Jellyfin API.
+      - ${MUSIC_LIBRARY:?set MUSIC_LIBRARY in .env}:${MUSIC_LIBRARY_CONTAINER:-/music}
+      # The download root. Mount it on the exact path used by slskd and
+      # qBittorrent, so their reported paths are valid here and hardlinks work.
+      - ${DOWNLOADS_ROOT:?set DOWNLOADS_ROOT in .env}:${DOWNLOADS_CONTAINER:-/downloads}
+    # Lets Muzikk reach services published on the host rather than on this network.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - mediastack
+
+networks:
+  mediastack:
+    external: true

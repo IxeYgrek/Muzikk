@@ -1,0 +1,26 @@
+# Keep the build context small: only backend/, frontend/ and docker/ are needed.
+.git
+.gitignore
+.venv
+venv
+**/__pycache__
+**/*.py[cod]
+**/.ruff_cache
+**/.pytest_cache
+*.egg-info
+
+frontend/node_modules
+frontend/dist
+frontend/.vite
+
+config
+config-test
+data
+*.db
+*.db-shm
+*.db-wal
+*.log
+
+.env
+README.md
+docs
