@@ -56,6 +56,7 @@ export const fr = {
   auth: {
     title: 'Connexion',
     subtitle: 'Utilisez votre compte Jellyfin',
+    subtitleLocal: 'Utilisez le compte créé sur ce serveur',
     username: "Nom d'utilisateur",
     password: 'Mot de passe',
     signIn: 'Se connecter',
@@ -67,8 +68,32 @@ export const fr = {
   },
   setup: {
     title: 'Installation de Muzikk',
-    subtitle: 'Deux étapes et vous pourrez vous connecter avec votre compte Jellyfin.',
+    subtitle:
+      'Choisissez une fois comment les comptes et la bibliothèque sont gérés. Ce choix ne pourra plus être modifié.',
     stepOf: 'Étape {{current}} sur {{total}}',
+    modeTitle: 'Comment Muzikk doit-il fonctionner ?',
+    modeDesc:
+      'Soit Jellyfin possède les comptes et la musicothèque, soit Muzikk gère les deux lui-même. Ce choix est définitif.',
+    modeJellyfin: 'Avec Jellyfin',
+    modeJellyfinDesc:
+      'Connexion avec les comptes Jellyfin. La bibliothèque est celle que Jellyfin indexe déjà.',
+    modeLocal: 'Entièrement local',
+    modeLocalDesc:
+      'Les comptes se créent dans Muzikk. La bibliothèque est lue dans le dossier que vous montez.',
+    modeWarning: 'Ce choix est permanent pour cette installation.',
+    adminTitle: 'Premier administrateur',
+    adminDesc:
+      'Ce compte se connectera en premier et pourra créer les autres depuis l’administration.',
+    usernameHint: '3 à 64 lettres, chiffres, points, tirets ou underscores.',
+    displayName: 'Nom affiché',
+    displayNameHint: 'Visible dans l’interface. Laissez vide pour reprendre le nom d’utilisateur.',
+    passwordHint: 'Au moins 8 caractères.',
+    passwordConfirm: 'Confirmer le mot de passe',
+    passwordMismatch: 'Les deux mots de passe ne correspondent pas.',
+    musicDirLocalHint:
+      'Le dossier tel que Muzikk le voit dans le conteneur. Il doit correspondre au volume monté sur /music.',
+    successLocalDesc:
+      'Connectez-vous avec le compte administrateur que vous venez de créer pour configurer le reste.',
     jellyfinTitle: 'Connexion à Jellyfin',
     jellyfinDesc:
       "Muzikk s'appuie sur Jellyfin pour l'authentification et pour lire votre musicothèque. La clé d'API se crée dans Jellyfin, section Tableau de bord puis Clés d'API.",
@@ -144,6 +169,7 @@ export const fr = {
   library: {
     title: 'Musicothèque',
     subtitle: 'Ce que Jellyfin contient déjà',
+    subtitleLocal: 'Ce que le dossier de bibliothèque contient déjà',
     empty: 'La musicothèque est vide ou pas encore indexée',
     emptyHint: 'Lancez une indexation depuis l’administration',
     searchPlaceholder: 'Album ou artiste…',
@@ -242,6 +268,7 @@ export const fr = {
     scanErrorOnAlbum:
       'Les tags de ce dossier n’ont pas pu être lus, les informations ci-dessous viennent du nom du dossier. Erreur :',
     inJellyfin: '{{count}} dans Jellyfin',
+    inLibrary: '{{count}} dans la bibliothèque',
     reportMissing:
       'Ces chiffres viennent d’une analyse antérieure, qui n’a pas laissé de rapport. Relancez « Analyser la bibliothèque » pour savoir ce qu’il advient de chaque dossier.',
     report: {
@@ -539,6 +566,11 @@ export const fr = {
   admin: {
     title: 'Administration',
     subtitle: 'Services, qualité, nommage et utilisateurs',
+    mode: 'Mode',
+    modes: {
+      jellyfin: 'Jellyfin',
+      local: 'Local',
+    },
     sections: {
       general: 'Général',
       jellyfin: 'Jellyfin',
@@ -575,7 +607,15 @@ export const fr = {
     indexerPrivate: 'Privé',
     minSeeders: 'Seeders min.',
     usersSync: 'Importer depuis Jellyfin',
+    userCreate: 'Ajouter un compte',
+    userCreated: 'Compte créé',
+    userPasswordChanged: 'Mot de passe mis à jour',
+    userDeleted: 'Compte supprimé',
+    userResetPassword: 'Réinitialiser le mot de passe',
+    userDelete: 'Supprimer',
+    userDeleteConfirm: 'Supprimer le compte {{name}} ? Ses demandes et suivis disparaîtront avec lui.',
     userAdmin: 'Admin',
+    userAdminHint: 'Un administrateur peut ouvrir les réglages et l’atelier des métadonnées.',
     userEnabled: 'Compte actif',
     userEnabledHint: 'Un compte désactivé ne peut plus se connecter.',
     userLastLogin: 'Dernière connexion',
@@ -727,6 +767,10 @@ export const fr = {
         'Proposer des extraits de 30 secondes pour les morceaux absents (Deezer puis iTunes)',
       max_bitrate: 'Débit maximum en bit/s (0 pour diffuser le fichier d’origine)',
       report_playback: 'Signaler les écoutes à Jellyfin',
+      transcode: 'Transcoder les fichiers que le navigateur ne sait pas lire',
+      transcodeHint:
+        'APE, WavPack, AIFF et quelques autres sont réencodés à la volée avec ffmpeg. Un déplacement du curseur relance le flux à la seconde choisie.',
+      transcode_format: 'Format de transcodage',
     },
   },
   status: {

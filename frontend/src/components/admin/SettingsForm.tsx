@@ -5,6 +5,7 @@ import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { ApiError, api } from '../../lib/api'
+import { useLocalMode } from '../../lib/hooks'
 import type { TestResult } from '../../lib/types'
 import { useToast } from '../Toast'
 import { Alert, Button, Card, Field, Input, Select, Toggle } from '../ui'
@@ -25,8 +26,8 @@ export const SECTION_FIELDS: Record<string, FieldSpec[]> = {
       key: 'default_language',
       type: 'select',
       options: [
-        { value: 'fr', label: 'Français' },
         { value: 'en', label: 'English' },
+        { value: 'fr', label: 'Français' },
       ],
     },
     { key: 'default_weekly_quota', type: 'number', min: 0 },
@@ -142,6 +143,25 @@ export const SECTION_FIELDS: Record<string, FieldSpec[]> = {
   ],
 }
 
+const LOCAL_PLAYER_FIELDS: FieldSpec[] = [
+  { key: 'enabled', type: 'bool', full: true },
+  { key: 'previews', type: 'bool', full: true },
+  { key: 'transcode', type: 'bool', full: true },
+  {
+    key: 'transcode_format',
+    type: 'select',
+    options: [
+      { value: 'mp3', label: 'MP3' },
+      { value: 'opus', label: 'Opus' },
+    ],
+  },
+]
+
+function fieldsFor(section: string, localMode: boolean): FieldSpec[] {
+  if (section === 'player' && localMode) return LOCAL_PLAYER_FIELDS
+  return SECTION_FIELDS[section] ?? []
+}
+
 type Values = Record<string, unknown>
 
 export function useSettingsSection(section: string) {
@@ -245,7 +265,8 @@ export function SettingsFields({
   set: (key: string, value: unknown) => void
 }) {
   const { t } = useTranslation()
-  const fields = SECTION_FIELDS[section] ?? []
+  const localMode = useLocalMode()
+  const fields = fieldsFor(section, localMode)
 
   return (
     <div className="grid gap-x-5 gap-y-4 sm:grid-cols-2">
@@ -260,6 +281,7 @@ export function SettingsFields({
             <div key={spec.key} className={className}>
               <Toggle
                 label={label}
+                hint={extraHint || undefined}
                 checked={Boolean(value)}
                 onChange={(next) => set(spec.key, next)}
               />

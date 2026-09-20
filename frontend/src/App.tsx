@@ -79,7 +79,10 @@ export function App() {
         <Route path="labels/:mbid" element={<LabelPage />} />
         <Route path="library" element={<LibraryPage />} />
         <Route path="library/albums/:jellyfinId" element={<LibraryAlbumPage />} />
-        <Route path="playlists" element={<PlaylistsPage />} />
+        <Route
+          path="playlists"
+          element={health?.mode === 'local' ? <Navigate to="/" replace /> : <PlaylistsPage />}
+        />
         <Route path="discover" element={<DiscoverPage />} />
         <Route path="requests" element={<RequestsPage />} />
         <Route path="requests/:id" element={<RequestsPage />} />

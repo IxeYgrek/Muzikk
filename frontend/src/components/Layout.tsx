@@ -5,7 +5,6 @@ import {
   Disc3,
   Compass,
   Inbox,
-  Languages,
   ListMusic,
   LogOut,
   Menu,
@@ -20,9 +19,10 @@ import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 
-import { currentLanguage, setLanguage } from '../i18n'
+import { LanguageSwitch } from './LanguageSwitch'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
+import { useLocalMode } from '../lib/hooks'
 import { usePlayer } from '../lib/player'
 import type { Stats } from '../lib/types'
 import { Logo } from './Logo'
@@ -33,6 +33,8 @@ type NavItem = {
   label: string
   icon: ReactNode
   adminOnly?: boolean
+  /** Playlists live in Jellyfin; an installation without one has none. */
+  jellyfinOnly?: boolean
   badge?: number
 }
 
@@ -41,6 +43,7 @@ export function Layout() {
   const { user, signOut } = useAuth()
   const location = useLocation()
   const player = usePlayer()
+  const localMode = useLocalMode()
   const [open, setOpen] = useState(false)
 
   const { data: stats } = useQuery({
@@ -54,7 +57,12 @@ export function Layout() {
   const items: NavItem[] = [
     { to: '/', label: t('nav.home'), icon: <Search className="size-[18px]" /> },
     { to: '/library', label: t('nav.library'), icon: <Disc3 className="size-[18px]" /> },
-    { to: '/playlists', label: t('nav.playlists'), icon: <ListMusic className="size-[18px]" /> },
+    {
+      to: '/playlists',
+      label: t('nav.playlists'),
+      icon: <ListMusic className="size-[18px]" />,
+      jellyfinOnly: true,
+    },
     { to: '/discover', label: t('nav.discover'), icon: <Compass className="size-[18px]" /> },
     {
       to: '/requests',
@@ -87,9 +95,9 @@ export function Layout() {
       icon: <Settings className="size-[18px]" />,
       adminOnly: true,
     },
-  ].filter((item) => !item.adminOnly || user?.is_admin)
-
-  const language = currentLanguage()
+  ]
+    .filter((item) => !item.adminOnly || user?.is_admin)
+    .filter((item) => !item.jellyfinOnly || !localMode)
 
   const nav = (
     <nav className="flex flex-1 flex-col gap-1 px-3">
@@ -121,22 +129,7 @@ export function Layout() {
 
   const footer = (
     <div className="space-y-3 border-t border-ink-700/60 p-3">
-      <div className="flex items-center gap-1 rounded-xl bg-ink-800/60 p-1">
-        <Languages className="ml-1.5 size-3.5 shrink-0 text-ink-500" />
-        {(['fr', 'en'] as const).map((code) => (
-          <button
-            key={code}
-            type="button"
-            onClick={() => setLanguage(code)}
-            className={clsx(
-              'flex-1 rounded-lg px-2 py-1 text-xs font-semibold uppercase transition-colors',
-              language === code ? 'bg-brand-600/30 text-ink-50' : 'text-ink-400 hover:text-ink-100',
-            )}
-          >
-            {code}
-          </button>
-        ))}
-      </div>
+      <LanguageSwitch />
 
       <div className="flex items-center gap-2.5 px-1">
         <div className="grid size-9 shrink-0 place-items-center rounded-full gradient-surface text-sm font-bold text-white">

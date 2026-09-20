@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 
 import { formatClock } from '../lib/format'
-import { usePreview } from '../lib/hooks'
+import { useLocalMode, usePreview } from '../lib/hooks'
 import { usePlayer } from '../lib/player'
 import type { TrackSearchResult } from '../lib/types'
 import { AddToPlaylistModal, type PlaylistTarget } from './AddToPlaylist'
@@ -34,6 +34,7 @@ export function TrackResults({
   const { t } = useTranslation()
   const navigate = useNavigate()
   const player = usePlayer()
+  const localMode = useLocalMode()
   const { playPreview, previewLoading } = usePreview()
   const [playlistTarget, setPlaylistTarget] = useState<PlaylistTarget | null>(null)
 
@@ -135,7 +136,7 @@ export function TrackResults({
               </span>
 
               <div className="flex shrink-0 gap-1">
-                {track.jellyfin_id && (
+                {track.jellyfin_id && !localMode && (
                   <button
                     type="button"
                     onClick={() =>

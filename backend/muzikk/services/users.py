@@ -1,20 +1,33 @@
-"""User import and authentication against Jellyfin."""
+"""Accounts: imported from Jellyfin, or owned by Muzikk itself."""
 
 from __future__ import annotations
 
 import logging
+import re
+import secrets
+from functools import lru_cache
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from ..models import User, utcnow
-from ..security import decrypt_secret, encrypt_secret
+from ..security import (
+    MIN_PASSWORD_LENGTH,
+    decrypt_secret,
+    encrypt_secret,
+    hash_password,
+    verify_password,
+)
+from . import mode as mode_service
 from . import settings as settings_service
 from .base import ServiceError
 from .jellyfin import JellyfinClient
 
 logger = logging.getLogger(__name__)
+
+USERNAME_RE = re.compile(r"^[A-Za-z0-9._-]{3,64}$")
 
 
 class AuthError(RuntimeError):
@@ -23,6 +36,10 @@ class AuthError(RuntimeError):
     def __init__(self, message: str, *, code: str = "invalid_credentials") -> None:
         super().__init__(message)
         self.code = code
+
+
+class AccountError(RuntimeError):
+    """Raised when an account cannot be created or changed as asked."""
 
 
 def _is_allowed(jellyfin_settings, jellyfin_user: dict[str, Any]) -> bool:
@@ -80,7 +97,124 @@ def upsert_user(session: Session, jellyfin_user: dict[str, Any], *, touch_login:
     return user
 
 
+@lru_cache(maxsize=1)
+def _decoy_hash() -> str:
+    """A hash no password matches, to keep a failed login slow either way.
+
+    Without it, an unknown name answers instantly while a known one pays for a
+    scrypt round, which is enough to enumerate the accounts of the server.
+    """
+    return hash_password(secrets.token_urlsafe(32))
+
+
+def normalize_username(value: str) -> str:
+    name = (value or "").strip()
+    if not USERNAME_RE.match(name):
+        raise AccountError(
+            "A username is 3 to 64 characters long and holds only letters, "
+            "digits, dots, dashes and underscores"
+        )
+    return name
+
+
+def check_password(value: str) -> str:
+    if len(value or "") < MIN_PASSWORD_LENGTH:
+        raise AccountError(f"A password is at least {MIN_PASSWORD_LENGTH} characters long")
+    return value
+
+
+def find_by_username(session: Session, username: str) -> User | None:
+    key = (username or "").strip().lower()
+    if not key:
+        return None
+    return session.execute(
+        select(User).where(func.lower(User.username) == key)
+    ).scalar_one_or_none()
+
+
+def create_local_user(
+    session: Session,
+    *,
+    username: str,
+    password: str,
+    display_name: str = "",
+    is_admin: bool = False,
+    can_request: bool = True,
+    can_upgrade: bool | None = None,
+    can_import: bool | None = None,
+    weekly_quota: int | None = None,
+) -> User:
+    """Add an account Muzikk owns. Only ever called in local mode."""
+    name = normalize_username(username)
+    check_password(password)
+    if find_by_username(session, name) is not None:
+        raise AccountError(f'The username "{name}" is already taken')
+
+    general = settings_service.load(session, "general")
+    user = User(
+        username=name,
+        password_hash=hash_password(password),
+        name=(display_name or "").strip() or name,
+        is_admin=is_admin,
+        is_enabled=True,
+        can_request=can_request,
+        # An administrator manages the library, so the two powers that write to
+        # it come switched on rather than hidden behind a second visit.
+        can_upgrade=is_admin if can_upgrade is None else can_upgrade,
+        can_import=is_admin if can_import is None else can_import,
+        weekly_quota=general.default_weekly_quota if weekly_quota is None else weekly_quota,
+    )
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    return user
+
+
+def set_password(session: Session, user: User, password: str) -> None:
+    if user.username is None:
+        raise AccountError("This account is managed by Jellyfin, set its password there")
+    check_password(password)
+    user.password_hash = hash_password(password)
+    session.commit()
+
+
+def rename_local_user(session: Session, user: User, username: str) -> None:
+    if user.username is None:
+        raise AccountError("This account is managed by Jellyfin, rename it there")
+    name = normalize_username(username)
+    existing = find_by_username(session, name)
+    if existing is not None and existing.id != user.id:
+        raise AccountError(f'The username "{name}" is already taken')
+    user.username = name
+    if not user.name.strip():
+        user.name = name
+    session.commit()
+
+
+def authenticate_local(session: Session, username: str, password: str) -> User:
+    user = find_by_username(session, username)
+    stored = user.password_hash if user is not None else _decoy_hash()
+    if not verify_password(password, stored) or user is None:
+        raise AuthError("Invalid username or password")
+    if not user.is_enabled:
+        raise AuthError("This account is disabled", code="disabled")
+    user.last_login_at = utcnow()
+    try:
+        session.commit()
+        session.refresh(user)
+    except OperationalError:
+        # A first-run library scan can hold SQLite for a moment. The password
+        # already checked out; refusing the session for a stamp is worse.
+        session.rollback()
+        logger.warning("Could not record last login for %s while the database is busy", username)
+        user = find_by_username(session, username) or user
+    return user
+
+
 async def authenticate(session: Session, username: str, password: str) -> User:
+    if mode_service.is_local(session):
+        return authenticate_local(session, username, password)
+
     jellyfin_settings = settings_service.load(session, "jellyfin")
     client = JellyfinClient(jellyfin_settings)
     if not client.configured:
@@ -109,6 +243,9 @@ async def authenticate(session: Session, username: str, password: str) -> User:
 
 async def sync_users(session: Session) -> dict[str, int]:
     """Import every Jellyfin user, honouring the allow list."""
+    if mode_service.is_local(session):
+        raise RuntimeError("This installation manages its own accounts")
+
     jellyfin_settings = settings_service.load(session, "jellyfin")
     client = JellyfinClient(jellyfin_settings)
     if not client.configured or not client.api_key:

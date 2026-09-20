@@ -101,6 +101,17 @@
     margin-top: 1rem;
 }
 
+.hero__credit {
+    max-width: 36rem;
+    margin: 1.25rem 0 0;
+    font-family: var(--font-display);
+    font-size: clamp(1.45rem, 4.2vw, 2.35rem);
+    font-weight: 700;
+    line-height: 1.15;
+    letter-spacing: -0.04em;
+    text-wrap: balance;
+}
+
 /* ---------------------------------------------------------------- intro */
 
 .intro__grid {

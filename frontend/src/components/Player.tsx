@@ -18,6 +18,7 @@ import type { CSSProperties } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { formatClock } from '../lib/format'
+import { useLocalMode } from '../lib/hooks'
 import { usePlayer } from '../lib/player'
 import { AddToPlaylistModal, type PlaylistTarget } from './AddToPlaylist'
 import { AlbumCover } from './AlbumCard'
@@ -27,6 +28,7 @@ import { Spinner } from './ui'
 export function Player() {
   const { t } = useTranslation()
   const player = usePlayer()
+  const localMode = useLocalMode()
   const [showQueue, setShowQueue] = useState(false)
   const [playlistTarget, setPlaylistTarget] = useState<PlaylistTarget | null>(null)
 
@@ -174,7 +176,7 @@ export function Player() {
           </div>
 
           <div className="flex shrink-0 items-center gap-0.5">
-            {current.jellyfin_id && (
+            {current.jellyfin_id && !localMode && (
               <button
                 type="button"
                 onClick={() =>

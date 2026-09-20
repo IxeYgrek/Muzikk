@@ -16,8 +16,7 @@ function detectLanguage(): Language {
   } catch {
     /* private browsing */
   }
-  const browser = (navigator.language || 'fr').slice(0, 2).toLowerCase()
-  return browser === 'en' ? 'en' : 'fr'
+  return 'en'
 }
 
 void i18next.use(initReactI18next).init({
@@ -26,10 +25,12 @@ void i18next.use(initReactI18next).init({
     en: { translation: en },
   },
   lng: detectLanguage(),
-  fallbackLng: 'fr',
+  fallbackLng: 'en',
   interpolation: { escapeValue: false },
   returnNull: false,
 })
+
+document.documentElement.lang = detectLanguage()
 
 export function setLanguage(language: Language): void {
   void i18next.changeLanguage(language)
@@ -42,7 +43,7 @@ export function setLanguage(language: Language): void {
 }
 
 export function currentLanguage(): Language {
-  return (i18next.language || 'fr').startsWith('en') ? 'en' : 'fr'
+  return (i18next.language || 'en').startsWith('fr') ? 'fr' : 'en'
 }
 
 export function currentLocale(): string {

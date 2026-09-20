@@ -1,11 +1,31 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { useToast } from '../components/Toast'
 import { ApiError, api } from './api'
 import { usePlayer } from './player'
-import type { AlbumCard, AlbumRequest, PlayableTrack } from './types'
+import type { AlbumCard, AlbumRequest, Health, Mode, PlayableTrack } from './types'
+
+/**
+ * Whether this installation runs without Jellyfin.
+ *
+ * The mode is decided once by the first run wizard and cannot change, so the
+ * answer is cached for the session and shared with the check `App` already
+ * makes on startup.
+ */
+export function useMode(): Mode {
+  const { data } = useQuery({
+    queryKey: ['health'],
+    queryFn: () => api<Health>('/health'),
+    staleTime: Number.POSITIVE_INFINITY,
+  })
+  return data?.mode ?? 'jellyfin'
+}
+
+export function useLocalMode(): boolean {
+  return useMode() === 'local'
+}
 
 /** Debounce any fast-changing value (search inputs mostly). */
 export function useDebounced<T>(value: T, delay = 350): T {

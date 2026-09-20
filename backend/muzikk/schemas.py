@@ -22,7 +22,9 @@ class LoginRequest(BaseModel):
 
 class UserOut(ORMModel):
     id: int
-    jellyfin_user_id: str
+    # Exactly one of the two, depending on the mode the install was built in.
+    jellyfin_user_id: str | None = None
+    username: str | None = None
     name: str
     is_admin: bool
     is_enabled: bool
@@ -50,6 +52,29 @@ class UserUpdate(BaseModel):
     auto_approve: bool | None = None
     weekly_quota: int | None = None
     is_admin: bool | None = None
+    # Local accounts only: Jellyfin owns the name and the login of its own.
+    name: str | None = None
+    username: str | None = None
+
+
+class UserCreate(BaseModel):
+    username: str
+    password: str
+    name: str = ""
+    is_admin: bool = False
+    can_request: bool = True
+    can_upgrade: bool | None = None
+    can_import: bool | None = None
+    weekly_quota: int | None = None
+
+
+class PasswordReset(BaseModel):
+    password: str
+
+
+class PasswordChange(BaseModel):
+    current_password: str
+    password: str
 
 
 # ------------------------------------------------------------------ browsing
@@ -400,6 +425,8 @@ class HealthOut(BaseModel):
     status: str
     version: str
     setup_required: bool
+    # "jellyfin" or "local": the interface hides whole sections accordingly.
+    mode: str = "jellyfin"
     services: dict[str, bool]
 
 
@@ -615,6 +642,11 @@ class PlayableTrack(BaseModel):
     cover_url: str | None = None
     # Which service the extract comes from, when this is one.
     preview: str | None = None
+    # Re-encoded on the fly, so the stream carries no byte index: the player
+    # has to restart it at an offset instead of seeking inside it.
+    transcoded: bool = False
+    # False when nothing can decode this file for the browser.
+    playable: bool = True
     stream_url: str
 
 

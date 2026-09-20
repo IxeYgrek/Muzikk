@@ -28,7 +28,11 @@ class GeneralSettings(Section):
     # Flipped once the first-run wizard has been completed; while false the
     # unauthenticated setup endpoints stay open.
     setup_completed: bool = False
-    default_language: str = "fr"
+    # "jellyfin" or "local". Written once by the wizard, never afterwards.
+    # Installs predating the local mode have no value stored and were built on
+    # Jellyfin, which is why that is the default.
+    mode: str = "jellyfin"
+    default_language: str = "en"
     require_approval: bool = True
     admins_bypass_approval: bool = True
     default_weekly_quota: int = 0
@@ -185,6 +189,11 @@ class PlayerSettings(Section):
     # Jellyfin transcodes on the fly when the browser cannot decode the file.
     max_bitrate: int = 0
     report_playback: bool = True
+    # Local mode only: without Jellyfin, an APE or a WavPack file has to be
+    # re-encoded here or it simply will not play. Turn it off to keep the CPU
+    # free and let those tracks be reported as unplayable instead.
+    transcode: bool = True
+    transcode_format: str = "mp3"
     # Read the file from the library folder instead of asking Jellyfin to send
     # it back. Faster, and immune to Jellyfin playback policies.
     direct_file_access: bool = True

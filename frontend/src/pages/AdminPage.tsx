@@ -28,6 +28,7 @@ import {
   UsersPanel,
 } from '../components/admin/panels'
 import { SettingsPanel } from '../components/admin/SettingsForm'
+import { useLocalMode } from '../lib/hooks'
 
 type SectionId =
   | 'general'
@@ -97,7 +98,11 @@ export function AdminPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const { section } = useParams()
-  const active = (SECTIONS.find((item) => item.id === section)?.id ?? 'general') as SectionId
+  const localMode = useLocalMode()
+
+  // Nothing to configure about a server this installation was never built on.
+  const sections = SECTIONS.filter((item) => item.id !== 'jellyfin' || !localMode)
+  const active = (sections.find((item) => item.id === section)?.id ?? 'general') as SectionId
 
   return (
     <div className="space-y-6">
@@ -108,7 +113,7 @@ export function AdminPage() {
 
       <div className="grid gap-6 lg:grid-cols-[15rem_1fr]">
         <nav className="flex gap-1.5 overflow-x-auto pb-2 lg:flex-col lg:overflow-visible lg:pb-0">
-          {SECTIONS.map((item) => (
+          {sections.map((item) => (
             <button
               key={item.id}
               type="button"

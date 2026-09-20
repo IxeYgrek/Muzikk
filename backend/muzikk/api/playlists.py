@@ -3,6 +3,9 @@
 Everything here runs under the token Muzikk stored when the user signed in,
 never under the server API key: a playlist belongs to an account, and the key
 would file them all under whichever account owns it.
+
+Playlists live in Jellyfin, so an installation without one has none. Every
+route below refuses in local mode and the interface hides the section.
 """
 
 from __future__ import annotations
@@ -16,6 +19,7 @@ from sqlalchemy.orm import Session
 from ..models import LibraryAlbum, User
 from ..schemas import PlaylistAdd, PlaylistChange, PlaylistCreate, PlaylistOut, PlaylistTrack
 from ..services import catalog, clients
+from ..services import mode as mode_service
 from ..services import users as users_service
 from ..services.base import ServiceError
 from ..services.jellyfin import JellyfinClient
@@ -27,6 +31,11 @@ router = APIRouter(prefix="/playlists", tags=["playlists"])
 
 
 def _client(session: Session) -> JellyfinClient:
+    if mode_service.is_local(session):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This installation has no Jellyfin, and therefore no playlists",
+        )
     client = clients.jellyfin(session)
     if not client.configured:
         raise HTTPException(status_code=400, detail="Jellyfin is not configured")

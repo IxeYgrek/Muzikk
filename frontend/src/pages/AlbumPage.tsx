@@ -25,7 +25,7 @@ import { Alert, Button, Card, CenteredSpinner, Chip, EmptyState, Spinner } from 
 import { ApiError, api } from '../lib/api'
 import { canRequestUpgrade, useAuth } from '../lib/auth'
 import { formatDuration } from '../lib/format'
-import { useAlbumRequest, usePreview } from '../lib/hooks'
+import { useAlbumRequest, useLocalMode, usePreview } from '../lib/hooks'
 import { usePlayer } from '../lib/player'
 import type { AlbumDetail, PlayableTrack, WatchedArtist } from '../lib/types'
 
@@ -46,6 +46,7 @@ export function AlbumPage() {
   const { request, pendingId } = useAlbumRequest()
   const { playPreview, previewLoading } = usePreview()
   const player = usePlayer()
+  const localMode = useLocalMode()
   const [showEditions, setShowEditions] = useState(false)
   const [playlistTarget, setPlaylistTarget] = useState<PlaylistTarget | null>(null)
 
@@ -219,18 +220,20 @@ export function AlbumPage() {
                   <Play className="size-4" />
                   {t('player.playAlbum')}
                 </Button>
-                <Button
-                  className="w-full"
-                  onClick={() =>
-                    setPlaylistTarget({
-                      label: `${album.artist_name} — ${album.title}`,
-                      albumId: album.ownership.jellyfin_id ?? undefined,
-                    })
-                  }
-                >
-                  <ListPlus className="size-4" />
-                  {t('playlists.addTo')}
-                </Button>
+                {!localMode && (
+                  <Button
+                    className="w-full"
+                    onClick={() =>
+                      setPlaylistTarget({
+                        label: `${album.artist_name} — ${album.title}`,
+                        albumId: album.ownership.jellyfin_id ?? undefined,
+                      })
+                    }
+                  >
+                    <ListPlus className="size-4" />
+                    {t('playlists.addTo')}
+                  </Button>
+                )}
               </>
             )}
 
@@ -476,7 +479,7 @@ export function AlbumPage() {
                             {/* Kept the same width whether the button is there
                                 or not, so the durations stay aligned. */}
                             <span className="grid size-7 shrink-0 place-items-center">
-                              {owned && playable[target].jellyfin_id && (
+                              {owned && !localMode && playable[target].jellyfin_id && (
                                 <button
                                   type="button"
                                   onClick={(event) => {

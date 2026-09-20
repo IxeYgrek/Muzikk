@@ -40,6 +40,8 @@ page_start(['class' => 'page-home']);
                 <li class="chip"><?= icon('check') ?><?= $badge ?></li>
             <?php endforeach; ?>
         </ul>
+
+        <p class="hero__credit gradient-text"><?= t('home.hero.credit') ?></p>
     </div>
 </section>
 

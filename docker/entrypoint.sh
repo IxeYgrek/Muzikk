@@ -32,4 +32,14 @@ chown -R "$PUID:$PGID" "$CONFIG_DIR" 2>/dev/null || true
 
 echo "Muzikk starting as ${USER_NAME}(${PUID}):${GROUP_NAME}(${PGID}) umask ${UMASK}"
 
+# The image CMD hardcodes --port 8383. Honour MUZIKK_PORT so a healthcheck
+# and a published mapping that follow that variable actually reach uvicorn.
+if [ "$1" = "uvicorn" ]; then
+    exec gosu "$PUID:$PGID" uvicorn muzikk.main:app \
+        --host 0.0.0.0 \
+        --port "${MUZIKK_PORT:-8383}" \
+        --proxy-headers \
+        --forwarded-allow-ips "*"
+fi
+
 exec gosu "$PUID:$PGID" "$@"

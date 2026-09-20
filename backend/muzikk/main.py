@@ -18,6 +18,7 @@ from .config import get_env_config
 from .db import init_db, session_scope
 from .jobs.runner import worker
 from .schemas import HealthOut
+from .services import mode as mode_service
 from .services import settings as settings_service
 
 logger = logging.getLogger(__name__)
@@ -93,23 +94,30 @@ app.include_router(api_router)
 async def health() -> HealthOut:
     with session_scope() as session:
         general = settings_service.load(session, "general")
+        active_mode = mode_service.current(session)
         jellyfin = settings_service.load(session, "jellyfin")
         musicbrainz = settings_service.load(session, "musicbrainz")
         slskd = settings_service.load(session, "slskd")
         prowlarr = settings_service.load(session, "prowlarr")
         qbittorrent = settings_service.load(session, "qbittorrent")
 
+    services = {
+        "musicbrainz": bool(musicbrainz.url or musicbrainz.use_public_fallback),
+        "slskd": bool(slskd.enabled and slskd.url and slskd.api_key),
+        "prowlarr": bool(prowlarr.enabled and prowlarr.url and prowlarr.api_key),
+        "qbittorrent": bool(qbittorrent.enabled and qbittorrent.url),
+    }
+    # Reporting a service this installation was never built on would only make
+    # the dashboard look broken.
+    if active_mode != mode_service.LOCAL:
+        services["jellyfin"] = bool(jellyfin.url and jellyfin.api_key)
+
     return HealthOut(
         status="ok",
         version=__version__,
         setup_required=not general.setup_completed,
-        services={
-            "jellyfin": bool(jellyfin.url and jellyfin.api_key),
-            "musicbrainz": bool(musicbrainz.url or musicbrainz.use_public_fallback),
-            "slskd": bool(slskd.enabled and slskd.url and slskd.api_key),
-            "prowlarr": bool(prowlarr.enabled and prowlarr.url and prowlarr.api_key),
-            "qbittorrent": bool(qbittorrent.enabled and qbittorrent.url),
-        },
+        mode=active_mode,
+        services=services,
     )
 
 

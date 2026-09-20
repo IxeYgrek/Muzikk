@@ -31,12 +31,22 @@ from ..schemas import (
     MetadataSummary,
 )
 from ..services import acoustid, catalog, coverfiles, jellyfincovers, jellyfinmeta, metadata
+from ..services import mode as mode_service
 from ..services import settings as settings_service
 from ..services.base import ServiceError
 from ..services.jellyfin import JellyfinClient
 from .deps import AdminUser, SessionDep
 
 router = APIRouter(prefix="/metadata", tags=["metadata"])
+
+
+def _require_jellyfin(session: SessionDep) -> None:
+    """Refuse the reconciliation passes on an install that has no Jellyfin."""
+    if mode_service.is_local(session):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This installation runs without Jellyfin",
+        )
 
 MBID_RE = re.compile(
     r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", re.IGNORECASE
@@ -185,6 +195,7 @@ async def start_artwork_sync(session: SessionDep, admin: AdminUser) -> dict[str,
 @router.post("/jellyfin-covers")
 async def start_jellyfin_covers(session: SessionDep, admin: AdminUser) -> dict[str, object]:
     """Queue the pass that gives Jellyfin the album covers it is missing."""
+    _require_jellyfin(session)
     if _job_running(session, queue.JELLYFIN_COVERS):
         return {"queued": False, "message": "the cover repair is already running"}
     queue.enqueue(session, queue.JELLYFIN_COVERS, priority=3)
@@ -194,6 +205,7 @@ async def start_jellyfin_covers(session: SessionDep, admin: AdminUser) -> dict[s
 @router.post("/jellyfin-metadata")
 async def start_jellyfin_metadata(session: SessionDep, admin: AdminUser) -> dict[str, object]:
     """Queue the pass that makes Jellyfin agree with the tags on disk."""
+    _require_jellyfin(session)
     if _job_running(session, queue.JELLYFIN_METADATA):
         return {"queued": False, "message": "the metadata alignment is already running"}
     queue.enqueue(session, queue.JELLYFIN_METADATA, priority=3)
@@ -442,11 +454,16 @@ async def apply_changes(album_id: int, session: SessionDep, admin: AdminUser) ->
             detail="; ".join(result.warnings) or "no file could be written",
         )
 
-    # Jellyfin will not read the corrected files on its own: its default refresh
-    # only fills in what is missing. The alignment pass is queued for this album
-    # alone, without the uniqueness guard, so correcting ten albums in a row
-    # queues ten passes rather than losing nine of them.
-    if row.jellyfin_id:
+    if mode_service.is_local(session):
+        # The index holds a copy of the tags that just changed, so it has to be
+        # walked again. Only the touched folder is really stale, but a rescan
+        # skips everything that did not move and costs next to nothing.
+        queue.enqueue(session, queue.LIBRARY_SYNC, priority=2)
+    elif row.jellyfin_id:
+        # Jellyfin will not read the corrected files on its own: its default
+        # refresh only fills in what is missing. The alignment pass is queued
+        # for this album alone, without the uniqueness guard, so correcting ten
+        # albums in a row queues ten passes rather than losing nine of them.
         queue.enqueue(
             session,
             queue.JELLYFIN_METADATA,
@@ -484,6 +501,7 @@ async def refresh_jellyfin(session: SessionDep, admin: AdminUser) -> dict[str, b
 
     The usual follow-up once the tags of an unindexed folder were repaired.
     """
+    _require_jellyfin(session)
     client = JellyfinClient(settings_service.load(session, "jellyfin"))
     if not client.configured or not client.api_key:
         raise HTTPException(status_code=400, detail="Jellyfin is not configured")

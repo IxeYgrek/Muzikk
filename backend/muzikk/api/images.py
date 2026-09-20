@@ -17,6 +17,7 @@ from sqlalchemy import select
 
 from ..models import LibraryAlbum, MetadataAlbum
 from ..services import artwork, clients, localmedia
+from ..services import mode as mode_service
 from ..services import settings as settings_service
 from ..services.base import ServiceError
 from ..services.coverart import CoverArtClient
@@ -101,6 +102,7 @@ async def _library_cover(session: SessionDep, item_id: str, size: int) -> bytes 
     The files come first — a ``cover.jpg`` or an ID3 picture — then Jellyfin,
     then Cover Art Archive. The path Jellyfin stored is remapped onto the
     music folder, because the two containers almost never share a prefix.
+    Without Jellyfin the chain is simply one link shorter.
     """
     cached = artwork.read_cached(item_id, size)
     if cached:
@@ -130,7 +132,7 @@ async def _library_cover(session: SessionDep, item_id: str, size: int) -> bytes 
     if not data and artwork.is_known_missing(item_id, size):
         return None
 
-    if not data:
+    if not data and not mode_service.is_local(session):
         data = await _jellyfin_bytes(session, item_id, size)
 
     if not data and album is not None:
@@ -147,7 +149,7 @@ async def _library_cover(session: SessionDep, item_id: str, size: int) -> bytes 
 
 
 async def _library_cover_for_group(session: SessionDep, group_mbid: str, size: int) -> bytes | None:
-    """The sleeve Jellyfin already has for this release group, if we own it."""
+    """The sleeve the library already holds for this release group, if we own it."""
     album = (
         session.execute(select(LibraryAlbum).where(LibraryAlbum.release_group_mbid == group_mbid))
         .scalars()

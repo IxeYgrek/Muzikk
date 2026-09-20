@@ -11,13 +11,14 @@ import { Alert, Button, Card, CenteredSpinner, Chip, EmptyState } from '../compo
 import { ApiError, api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { formatClock } from '../lib/format'
+import { useLocalMode } from '../lib/hooks'
 import { usePlayer } from '../lib/player'
 import type { LibraryAlbum, LibraryAlbumDetail } from '../lib/types'
 
 /**
  * MusicBrainz wraps special-purpose artists in brackets. A folder filed
  * under one of those names is a pile of leftovers, not an album: there is
- * no release group behind it, even when Jellyfin stored some other MBID.
+ * no release group behind it, even when the index stored some other MBID.
  */
 function hasCataloguePage(album: LibraryAlbum): boolean {
   if (!album.release_group_mbid) return false
@@ -28,9 +29,9 @@ function hasCataloguePage(album: LibraryAlbum): boolean {
 /**
  * An album of the library seen from the library itself.
  *
- * The catalogue page needs a MusicBrainz release group; a folder Jellyfin
- * gathered from untagged files has none, and this is where it lands so every
- * sleeve in the grid can be clicked.
+ * The catalogue page needs a MusicBrainz release group; a folder of untagged
+ * files has none, and this is where it lands so every sleeve in the grid can
+ * be clicked.
  */
 export function LibraryAlbumPage() {
   const { jellyfinId = '' } = useParams()
@@ -38,6 +39,7 @@ export function LibraryAlbumPage() {
   const navigate = useNavigate()
   const player = usePlayer()
   const { user } = useAuth()
+  const localMode = useLocalMode()
   const [playlistTarget, setPlaylistTarget] = useState<PlaylistTarget | null>(null)
 
   const detail = useQuery({
@@ -87,19 +89,21 @@ export function LibraryAlbumPage() {
             <Play className="size-4" />
             {t('player.playAlbum')}
           </Button>
-          <Button
-            variant="secondary"
-            className="w-full"
-            onClick={() =>
-              setPlaylistTarget({
-                label: `${album.album_artist} — ${album.name}`,
-                albumId: album.jellyfin_id,
-              })
-            }
-          >
-            <ListPlus className="size-4" />
-            {t('playlists.addTo')}
-          </Button>
+          {!localMode && (
+            <Button
+              variant="secondary"
+              className="w-full"
+              onClick={() =>
+                setPlaylistTarget({
+                  label: `${album.album_artist} — ${album.name}`,
+                  albumId: album.jellyfin_id,
+                })
+              }
+            >
+              <ListPlus className="size-4" />
+              {t('playlists.addTo')}
+            </Button>
+          )}
 
           {hasCataloguePage(album) ? (
             <Link
@@ -215,25 +219,27 @@ export function LibraryAlbumPage() {
                             <span className="shrink-0 tabular-nums text-xs text-ink-400">
                               {track.duration ? formatClock(track.duration) : ''}
                             </span>
-                            <span className="grid size-7 shrink-0 place-items-center">
-                              <button
-                                type="button"
-                                onClick={(event) => {
-                                  event.stopPropagation()
-                                  setPlaylistTarget({
-                                    label: [track.artist || album.album_artist, track.title]
-                                      .filter(Boolean)
-                                      .join(' — '),
-                                    trackIds: [track.jellyfin_id],
-                                  })
-                                }}
-                                title={t('playlists.addTo')}
-                                aria-label={t('playlists.addTo')}
-                                className="rounded-lg p-1.5 text-ink-400 opacity-0 transition-opacity hover:bg-ink-700/60 hover:text-ink-100 focus-visible:opacity-100 group-hover:opacity-100"
-                              >
-                                <ListPlus className="size-3.5" />
-                              </button>
-                            </span>
+                            {!localMode && (
+                              <span className="grid size-7 shrink-0 place-items-center">
+                                <button
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation()
+                                    setPlaylistTarget({
+                                      label: [track.artist || album.album_artist, track.title]
+                                        .filter(Boolean)
+                                        .join(' — '),
+                                      trackIds: [track.jellyfin_id],
+                                    })
+                                  }}
+                                  title={t('playlists.addTo')}
+                                  aria-label={t('playlists.addTo')}
+                                  className="rounded-lg p-1.5 text-ink-400 opacity-0 transition-opacity hover:bg-ink-700/60 hover:text-ink-100 focus-visible:opacity-100 group-hover:opacity-100"
+                                >
+                                  <ListPlus className="size-3.5" />
+                                </button>
+                              </span>
+                            )}
                           </div>
                         )
                       })}

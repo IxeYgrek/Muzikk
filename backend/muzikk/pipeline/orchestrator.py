@@ -25,7 +25,9 @@ from ..providers.base import AlbumQuery, Candidate, DownloadHandle, Provider
 from ..providers.prowlarr import ProwlarrClient, TorrentProvider, group_for_privacy
 from ..providers.qbittorrent import QbittorrentClient
 from ..providers.slskd import SlskdProvider
+from ..jobs import queue
 from ..services import clients
+from ..services import mode as mode_service
 from ..services import settings as settings_service
 from ..services.base import ServiceError
 from . import cleanup, salvage, verify
@@ -736,6 +738,7 @@ class Orchestrator:
             naming = settings_service.load(session, "naming")
             coverart_settings = settings_service.load(session, "coverart")
             jellyfin_settings = settings_service.load(session, "jellyfin")
+            local_mode = mode_service.is_local(session)
             set_status(session, request_id, RequestStatus.VERIFYING)
             request = session.get(Request, request_id)
             is_upgrade = bool(request.is_upgrade)
@@ -808,7 +811,12 @@ class Orchestrator:
 
         await provider.finalize(handle, keep_source=keep_source)
 
-        if jellyfin_settings.trigger_scan_on_import and jellyfin_client.api_key:
+        if local_mode:
+            # Nobody else will notice the new folder, and waiting for the
+            # periodic walk would keep the album out of the library for hours.
+            with session_scope() as session:
+                queue.enqueue(session, queue.LIBRARY_SYNC, priority=2)
+        elif jellyfin_settings.trigger_scan_on_import and jellyfin_client.api_key:
             try:
                 await jellyfin_client.refresh_library()
                 with session_scope() as session:

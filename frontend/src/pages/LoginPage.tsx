@@ -5,12 +5,18 @@ import type { FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 
+import { LanguageSwitch } from '../components/LanguageSwitch'
 import { Logo } from '../components/Logo'
 import { Alert, Button, Card, Field, Input } from '../components/ui'
 import { ApiError, api } from '../lib/api'
 import { useAuth } from '../lib/auth'
+import type { Mode } from '../lib/types'
 
-type ServerInfo = { jellyfin_configured: boolean; jellyfin_server_name: string | null }
+type ServerInfo = {
+  mode: Mode
+  jellyfin_configured: boolean
+  jellyfin_server_name: string | null
+}
 
 export function LoginPage() {
   const { t } = useTranslation()
@@ -55,13 +61,16 @@ export function LoginPage() {
           <Logo size="lg" showWordmark={false} />
           <h1 className="font-display text-4xl font-bold gradient-text">Muzikk</h1>
           <p className="text-sm text-ink-400">{t('common.tagline')}</p>
+          <LanguageSwitch className="mt-1 w-40" />
         </div>
 
         <Card className="p-6">
           <h2 className="font-display text-xl text-ink-100">{t('auth.title')}</h2>
-          <p className="mt-1 text-sm text-ink-400">{t('auth.subtitle')}</p>
+          <p className="mt-1 text-sm text-ink-400">
+            {server?.mode === 'local' ? t('auth.subtitleLocal') : t('auth.subtitle')}
+          </p>
 
-          {server && !server.jellyfin_configured ? (
+          {server && server.mode !== 'local' && !server.jellyfin_configured ? (
             <div className="mt-5 space-y-4">
               <Alert tone="warning">{t('auth.jellyfinNotConfigured')}</Alert>
               <Link to="/setup" className="btn btn-primary w-full">

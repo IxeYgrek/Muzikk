@@ -58,6 +58,7 @@ export const en: Translation = {
   auth: {
     title: 'Sign in',
     subtitle: 'Use your Jellyfin account',
+    subtitleLocal: 'Use the account created on this server',
     username: 'Username',
     password: 'Password',
     signIn: 'Sign in',
@@ -69,8 +70,27 @@ export const en: Translation = {
   },
   setup: {
     title: 'Muzikk setup',
-    subtitle: 'Two steps and you will be able to sign in with your Jellyfin account.',
+    subtitle: 'Choose once how accounts and the library are managed. The choice cannot be changed later.',
     stepOf: 'Step {{current}} of {{total}}',
+    modeTitle: 'How should Muzikk run?',
+    modeDesc:
+      'Either Jellyfin owns the accounts and the music library, or Muzikk handles both on its own. This cannot be undone.',
+    modeJellyfin: 'With Jellyfin',
+    modeJellyfinDesc: 'Sign in with Jellyfin accounts. The library is the one Jellyfin already indexes.',
+    modeLocal: 'Local only',
+    modeLocalDesc: 'Create accounts in Muzikk. The library is scanned from the folder you mount.',
+    modeWarning: 'This choice is permanent for this installation.',
+    adminTitle: 'First administrator',
+    adminDesc: 'This account will sign in first and can create the others from the administration pages.',
+    usernameHint: '3 to 64 letters, digits, dots, dashes or underscores.',
+    displayName: 'Display name',
+    displayNameHint: 'Shown in the interface. Leave empty to reuse the username.',
+    passwordHint: 'At least 8 characters.',
+    passwordConfirm: 'Confirm the password',
+    passwordMismatch: 'The two passwords do not match.',
+    musicDirLocalHint:
+      'The folder as Muzikk sees it inside the container. It must be the volume you mounted on /music.',
+    successLocalDesc: 'Sign in with the administrator account you just created to configure the rest.',
     jellyfinTitle: 'Connect to Jellyfin',
     jellyfinDesc:
       'Muzikk relies on Jellyfin for authentication and to read your music library. Create the API key in Jellyfin under Dashboard then API Keys.',
@@ -146,6 +166,7 @@ export const en: Translation = {
   library: {
     title: 'Library',
     subtitle: 'What Jellyfin already holds',
+    subtitleLocal: 'What is already in the library folder',
     empty: 'The library is empty or not indexed yet',
     emptyHint: 'Trigger an index from the administration pages',
     searchPlaceholder: 'Album or artist…',
@@ -242,6 +263,7 @@ export const en: Translation = {
     scanErrorOnAlbum:
       'The tags of this folder could not be read; what follows comes from the folder name. Error:',
     inJellyfin: '{{count}} in Jellyfin',
+    inLibrary: '{{count}} in the library',
     reportMissing:
       'These numbers come from an earlier analysis, which left no report. Run “Analyse the library” again to see what happens to every folder.',
     report: {
@@ -536,6 +558,11 @@ export const en: Translation = {
   admin: {
     title: 'Administration',
     subtitle: 'Services, quality, naming and users',
+    mode: 'Mode',
+    modes: {
+      jellyfin: 'Jellyfin',
+      local: 'Local',
+    },
     sections: {
       general: 'General',
       jellyfin: 'Jellyfin',
@@ -571,7 +598,15 @@ export const en: Translation = {
     indexerPrivate: 'Private',
     minSeeders: 'Min. seeders',
     usersSync: 'Import from Jellyfin',
+    userCreate: 'Add an account',
+    userCreated: 'Account created',
+    userPasswordChanged: 'Password updated',
+    userDeleted: 'Account deleted',
+    userResetPassword: 'Reset password',
+    userDelete: 'Delete',
+    userDeleteConfirm: 'Delete the account {{name}}? Their requests and follows go with it.',
     userAdmin: 'Admin',
+    userAdminHint: 'An administrator can open the settings and the metadata workshop.',
     userEnabled: 'Account active',
     userEnabledHint: 'A disabled account can no longer sign in.',
     userLastLogin: 'Last sign-in',
@@ -722,6 +757,10 @@ export const en: Translation = {
         'Offer thirty second extracts for the tracks you do not own (Deezer then iTunes)',
       max_bitrate: 'Maximum bitrate in bits per second (0 streams the original file)',
       report_playback: 'Report plays to Jellyfin',
+      transcode: 'Transcode files the browser cannot play',
+      transcodeHint:
+        'APE, WavPack, AIFF and a few others are re-encoded on the fly with ffmpeg. Seeking restarts the stream at the chosen second.',
+      transcode_format: 'Transcode format',
     },
   },
   status: {

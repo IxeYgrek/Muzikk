@@ -1,4 +1,8 @@
-"""The Jellyfin music library, served from the local index."""
+"""The music library, served from the index Muzikk keeps.
+
+The rows come from Jellyfin or from the local scanner depending on the mode,
+but the queries below never need to know which.
+"""
 
 from __future__ import annotations
 
@@ -8,7 +12,8 @@ from sqlalchemy import String, func, or_, select
 from ..matching.normalize import normalize_artist, normalize_title
 from ..models import LibraryAlbum, LibraryArtist
 from ..schemas import LibraryAlbumDetail, LibraryAlbumOut, LibraryResponse, LibraryTrack
-from ..services import clients, library_index
+from ..services import clients, library_index, library_sync, local_library
+from ..services import mode as mode_service
 from ..services.base import ServiceError
 from .deps import AdminUser, CurrentUser, SessionDep
 
@@ -80,8 +85,8 @@ async def album_detail(
     """One album of the library, tracklist included.
 
     Most albums carry a MusicBrainz release group and are read on the catalogue
-    page instead. This one answers for the others: a folder Jellyfin gathered
-    without any tag still deserves a page of its own.
+    page instead. This one answers for the others: a folder gathered without
+    any tag still deserves a page of its own.
     """
     row = (
         session.execute(select(LibraryAlbum).where(LibraryAlbum.jellyfin_id == jellyfin_id))
@@ -93,6 +98,26 @@ async def album_detail(
 
     tracks: list[LibraryTrack] = []
     failure: str | None = None
+
+    if mode_service.is_local(session):
+        tracks = [
+            LibraryTrack(
+                jellyfin_id=entry.item_id,
+                title=entry.title,
+                artist=entry.artist,
+                track=entry.track,
+                disc=entry.disc,
+                duration=entry.duration,
+                container=entry.container,
+            )
+            for entry in local_library.album_tracks(session, jellyfin_id)
+        ]
+        if not tracks:
+            failure = "This album holds no indexed file; run a library scan"
+        return LibraryAlbumDetail(
+            album=LibraryAlbumOut.model_validate(row), tracks=tracks, tracks_error=failure
+        )
+
     client = clients.jellyfin(session)
     if not client.configured:
         failure = "Jellyfin is not configured"
@@ -176,7 +201,11 @@ async def library_stats(session: SessionDep, user: CurrentUser) -> dict[str, int
         ).scalar()
         or 0
     )
-    tracks = session.execute(select(func.sum(LibraryAlbum.track_count))).scalar() or 0
+    tracks = (
+        local_library.track_count(session)
+        if mode_service.is_local(session)
+        else int(session.execute(select(func.sum(LibraryAlbum.track_count))).scalar() or 0)
+    )
     artists = session.execute(select(func.count()).select_from(LibraryArtist)).scalar() or 0
     return {
         "albums": total,
@@ -188,9 +217,9 @@ async def library_stats(session: SessionDep, user: CurrentUser) -> dict[str, int
 
 
 @router.post("/sync")
-async def sync(session: SessionDep, admin: AdminUser) -> dict[str, int]:
+async def sync(session: SessionDep, admin: AdminUser) -> dict[str, object]:
     try:
-        return await library_index.sync_library(session)
+        return await library_sync.sync(session)
     except RuntimeError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

@@ -6,10 +6,13 @@ import {
   CheckCircle2,
   Cpu,
   Image,
+  KeyRound,
   Library,
   Play,
   RefreshCw,
   ShieldCheck,
+  Trash2,
+  UserPlus,
   Users,
 } from 'lucide-react'
 import { useState } from 'react'
@@ -18,10 +21,10 @@ import { useTranslation } from 'react-i18next'
 import { currentLocale } from '../../i18n'
 import { ApiError, api } from '../../lib/api'
 import { formatDateTime } from '../../lib/format'
-import { useDebounced } from '../../lib/hooks'
+import { useDebounced, useLocalMode } from '../../lib/hooks'
 import type { Indexer, JellyfinLibrary, JobRow, SystemInfo, User } from '../../lib/types'
 import { useToast } from '../Toast'
-import { Alert, Button, Card, Chip, Field, Input, Select, Toggle } from '../ui'
+import { Alert, Button, Card, Chip, Field, Input, Modal, Select, Toggle } from '../ui'
 import { SettingsFields, SettingsPanel, useSettingsSection } from './SettingsForm'
 
 const JOB_KINDS = [
@@ -33,6 +36,9 @@ const JOB_KINDS = [
   'retry_failed',
   'prune_events',
 ]
+
+// Importing Jellyfin users makes no sense without a Jellyfin.
+const LOCAL_JOB_KINDS = JOB_KINDS.filter((kind) => kind !== 'users_sync')
 
 function useFail() {
   const { notify } = useToast()
@@ -358,23 +364,108 @@ export function IndexersPanel() {
 
 /* --------------------------------------------------------------------- users */
 
+/** Create a local account, or reset the password of one. */
+function AccountModal({
+  mode,
+  busy,
+  error,
+  onClose,
+  onSubmit,
+}: {
+  mode: 'create' | 'password'
+  busy: boolean
+  error: string | null
+  onClose: () => void
+  onSubmit: (values: { username: string; password: string; name: string; isAdmin: boolean }) => void
+}) {
+  const { t } = useTranslation()
+  const [username, setUsername] = useState('')
+  const [name, setName] = useState('')
+  const [password, setPassword] = useState('')
+  const [isAdmin, setIsAdmin] = useState(false)
+
+  const ready =
+    password.length >= 8 && (mode === 'password' || username.trim().length >= 3)
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={mode === 'create' ? t('admin.userCreate') : t('admin.userResetPassword')}
+      footer={
+        <>
+          <Button onClick={onClose} disabled={busy}>
+            {t('common.cancel')}
+          </Button>
+          <Button
+            variant="primary"
+            loading={busy}
+            disabled={!ready}
+            onClick={() => onSubmit({ username: username.trim(), password, name: name.trim(), isAdmin })}
+          >
+            {t('common.confirm')}
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        {mode === 'create' && (
+          <>
+            <Field label={t('auth.username')} hint={t('setup.usernameHint')}>
+              <Input value={username} onChange={(event) => setUsername(event.target.value)} autoFocus />
+            </Field>
+            <Field label={t('setup.displayName')}>
+              <Input value={name} onChange={(event) => setName(event.target.value)} />
+            </Field>
+          </>
+        )}
+        <Field label={t('auth.password')} hint={t('setup.passwordHint')}>
+          <Input
+            type="password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            autoComplete="new-password"
+            autoFocus={mode === 'password'}
+          />
+        </Field>
+        {mode === 'create' && (
+          <Toggle
+            label={t('admin.userAdmin')}
+            hint={t('admin.userAdminHint')}
+            checked={isAdmin}
+            onChange={setIsAdmin}
+          />
+        )}
+        {error && <Alert tone="error">{error}</Alert>}
+      </div>
+    </Modal>
+  )
+}
+
 export function UsersPanel() {
   const { t } = useTranslation()
   const locale = currentLocale()
   const queryClient = useQueryClient()
   const { notify } = useToast()
   const fail = useFail()
+  const localMode = useLocalMode()
+
+  const [creating, setCreating] = useState(false)
+  const [resetting, setResetting] = useState<User | null>(null)
+  const [modalError, setModalError] = useState<string | null>(null)
 
   const users = useQuery({
     queryKey: ['admin', 'users'],
     queryFn: () => api<User[]>('/admin/users'),
   })
 
+  const reload = () => void queryClient.invalidateQueries({ queryKey: ['admin', 'users'] })
+
   const sync = useMutation({
     mutationFn: () => api<Record<string, number>>('/admin/users/sync', { method: 'POST' }),
     onSuccess: (result) => {
       notify(`${result.imported ?? 0} / ${result.total ?? 0}`, 'success')
-      void queryClient.invalidateQueries({ queryKey: ['admin', 'users'] })
+      reload()
     },
     onError: fail,
   })
@@ -382,17 +473,62 @@ export function UsersPanel() {
   const update = useMutation({
     mutationFn: ({ id, patch }: { id: number; patch: Record<string, unknown> }) =>
       api<User>(`/admin/users/${id}`, { method: 'PATCH', body: patch }),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['admin', 'users'] }),
+    onSuccess: reload,
+    onError: fail,
+  })
+
+  const create = useMutation({
+    mutationFn: (body: Record<string, unknown>) =>
+      api<User>('/admin/users', { method: 'POST', body }),
+    onSuccess: () => {
+      notify(t('admin.userCreated'), 'success')
+      setCreating(false)
+      reload()
+    },
+    onError: (error) =>
+      setModalError(error instanceof ApiError ? error.message : t('errors.generic')),
+  })
+
+  const resetPassword = useMutation({
+    mutationFn: ({ id, password }: { id: number; password: string }) =>
+      api(`/admin/users/${id}/password`, { method: 'POST', body: { password } }),
+    onSuccess: () => {
+      notify(t('admin.userPasswordChanged'), 'success')
+      setResetting(null)
+    },
+    onError: (error) =>
+      setModalError(error instanceof ApiError ? error.message : t('errors.generic')),
+  })
+
+  const remove = useMutation({
+    mutationFn: (id: number) => api(`/admin/users/${id}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      notify(t('admin.userDeleted'), 'success')
+      reload()
+    },
     onError: fail,
   })
 
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
-        <Button onClick={() => sync.mutate()} loading={sync.isPending}>
-          <Users className="size-4" />
-          {t('admin.usersSync')}
-        </Button>
+        {localMode ? (
+          <Button
+            variant="primary"
+            onClick={() => {
+              setModalError(null)
+              setCreating(true)
+            }}
+          >
+            <UserPlus className="size-4" />
+            {t('admin.userCreate')}
+          </Button>
+        ) : (
+          <Button onClick={() => sync.mutate()} loading={sync.isPending}>
+            <Users className="size-4" />
+            {t('admin.usersSync')}
+          </Button>
+        )}
       </div>
 
       <div className="space-y-3">
@@ -406,6 +542,7 @@ export function UsersPanel() {
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="truncate font-medium text-ink-100">{user.name}</span>
+                    {user.username && <Chip tone="muted">{user.username}</Chip>}
                     {user.is_admin && (
                       <Chip tone="brand">
                         <ShieldCheck className="size-3" />
@@ -419,15 +556,45 @@ export function UsersPanel() {
                   </div>
                 </div>
               </div>
-              <div className="min-w-[14rem]">
-                <Toggle
-                  label={t('admin.userEnabled')}
-                  hint={t('admin.userEnabledHint')}
-                  checked={user.is_enabled}
-                  onChange={(value) =>
-                    update.mutate({ id: user.id, patch: { is_enabled: value } })
-                  }
-                />
+              <div className="flex flex-wrap items-center gap-2">
+                {localMode && (
+                  <>
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        setModalError(null)
+                        setResetting(user)
+                      }}
+                      title={t('admin.userResetPassword')}
+                    >
+                      <KeyRound className="size-3.5" />
+                      {t('admin.userResetPassword')}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="danger"
+                      loading={remove.isPending}
+                      onClick={() => {
+                        if (window.confirm(t('admin.userDeleteConfirm', { name: user.name }))) {
+                          remove.mutate(user.id)
+                        }
+                      }}
+                      title={t('admin.userDelete')}
+                    >
+                      <Trash2 className="size-3.5" />
+                    </Button>
+                  </>
+                )}
+                <div className="min-w-[14rem]">
+                  <Toggle
+                    label={t('admin.userEnabled')}
+                    hint={t('admin.userEnabledHint')}
+                    checked={user.is_enabled}
+                    onChange={(value) =>
+                      update.mutate({ id: user.id, patch: { is_enabled: value } })
+                    }
+                  />
+                </div>
               </div>
             </div>
 
@@ -459,6 +626,16 @@ export function UsersPanel() {
                       update.mutate({ id: user.id, patch: { can_import: value } })
                     }
                   />
+                  {localMode && (
+                    <Toggle
+                      label={t('admin.userAdmin')}
+                      hint={t('admin.userAdminHint')}
+                      checked={user.is_admin}
+                      onChange={(value) =>
+                        update.mutate({ id: user.id, patch: { is_admin: value } })
+                      }
+                    />
+                  )}
                 </div>
               </section>
 
@@ -509,6 +686,35 @@ export function UsersPanel() {
           </Card>
         ))}
       </div>
+
+      {creating && (
+        <AccountModal
+          mode="create"
+          busy={create.isPending}
+          error={modalError}
+          onClose={() => setCreating(false)}
+          onSubmit={(values) =>
+            create.mutate({
+              username: values.username,
+              password: values.password,
+              name: values.name,
+              is_admin: values.isAdmin,
+            })
+          }
+        />
+      )}
+
+      {resetting && (
+        <AccountModal
+          mode="password"
+          busy={resetPassword.isPending}
+          error={modalError}
+          onClose={() => setResetting(null)}
+          onSubmit={(values) =>
+            resetPassword.mutate({ id: resetting.id, password: values.password })
+          }
+        />
+      )}
     </div>
   )
 }
@@ -521,6 +727,7 @@ export function SystemPanel() {
   const queryClient = useQueryClient()
   const { notify } = useToast()
   const fail = useFail()
+  const localMode = useLocalMode()
 
   const system = useQuery({
     queryKey: ['admin', 'system'],
@@ -554,6 +761,7 @@ export function SystemPanel() {
     <div className="space-y-5">
       <Card className="grid gap-4 p-5 sm:grid-cols-2">
         <Info label="Version" value={info?.version} />
+        <Info label={t('admin.mode')} value={info ? t(`admin.modes.${info.mode}`, info.mode) : undefined} />
         <Info label="Config" value={info?.config_dir} />
         <Info label={t('fields.naming.music_dir')} value={info?.music_dir} />
         <Info label="Workers" value={info ? String(info.worker_concurrency) : undefined} />
@@ -573,7 +781,7 @@ export function SystemPanel() {
       <Card className="space-y-4 p-5">
         <div className="label mb-0">{t('admin.jobs')}</div>
         <div className="flex flex-wrap gap-2">
-          {JOB_KINDS.map((kind) => (
+          {(localMode ? LOCAL_JOB_KINDS : JOB_KINDS).map((kind) => (
             <Button key={kind} size="sm" onClick={() => run.mutate(kind)} disabled={run.isPending}>
               <Play className="size-3.5" />
               {t(`admin.jobKinds.${kind}`, kind)}

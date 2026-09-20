@@ -2,9 +2,13 @@
 
 Audio never reaches the browser straight from Jellyfin: no Jellyfin token
 leaves the server, and a media server only reachable inside the Docker network
-keeps working. Two sources answer a track, in this order: the file itself when
-the library folder is mounted here, then Jellyfin for anything a browser cannot
+keeps working. Sources answer a track in this order: the file itself when the
+library folder is mounted here, then Jellyfin for anything a browser cannot
 decode. Both honour Range requests, so seeking behaves normally.
+
+In local mode there is no Jellyfin to fall back on, so a container the browser
+refuses goes through ffmpeg instead. That stream has no byte index, so seeking
+restarts it at the wanted second rather than jumping inside it.
 """
 
 from __future__ import annotations
@@ -20,11 +24,13 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ..models import LibraryAlbum, User
+from ..models import LibraryAlbum, LibraryTrack, User
 from ..models import Request as AlbumRequest
 from ..schemas import PlayableTrack
-from ..services import catalog, clients, localmedia, previews
+from ..services import catalog, clients, local_library, localmedia, previews
+from ..services import mode as mode_service
 from ..services import settings as settings_service
+from ..services import transcode as transcode_service
 from ..services import users as users_service
 from ..services.base import ServiceError
 from ..services.jellyfin import JellyfinClient
@@ -102,12 +108,60 @@ def _to_playable(item: dict[str, Any], album: LibraryAlbum | None) -> PlayableTr
     )
 
 
+def _local_file(session: Session, row: LibraryTrack) -> Path | None:
+    """The file behind an indexed track, if it is still where the scan saw it."""
+    naming = settings_service.load(session, "naming")
+    path = localmedia.resolve(row.path, naming.music_dir)
+    if path is None or localmedia.file_size(path) <= 0:
+        return None
+    return path
+
+
+def _local_playable(session: Session, row: LibraryTrack, album: LibraryAlbum | None) -> PlayableTrack:
+    config = settings_service.load(session, "player")
+    path = Path(row.path)
+    native = localmedia.is_browser_playable(path)
+    return PlayableTrack(
+        jellyfin_id=row.item_id,
+        title=row.title,
+        artist=row.artist or (album.album_artist if album else ""),
+        album=row.album or (album.name if album else ""),
+        album_id=row.album_item_id,
+        track=row.track,
+        disc=row.disc,
+        duration=row.duration,
+        container=row.container,
+        cover_url=catalog.cover_url(
+            album.release_group_mbid if album else None,
+            album.release_mbid if album else None,
+            row.album_item_id,
+        ),
+        # The browser cannot seek inside a re-encoded stream, so it has to be
+        # told which tracks are one before it draws a seek bar it can trust.
+        transcoded=not native and config.transcode and transcode_service.available(),
+        playable=native or (config.transcode and transcode_service.available()),
+        stream_url=f"/api/play/track/{row.item_id}",
+    )
+
+
 @router.get("/album/{album_id}", response_model=list[PlayableTrack])
 async def album_queue(
     album_id: str, session: SessionDep, user: CurrentUser
 ) -> list[PlayableTrack]:
     """The play queue of one library album, in track order."""
     _require_enabled(session)
+
+    if mode_service.is_local(session):
+        album = (
+            session.execute(select(LibraryAlbum).where(LibraryAlbum.jellyfin_id == album_id))
+            .scalars()
+            .first()
+        )
+        return [
+            _local_playable(session, row, album)
+            for row in local_library.album_tracks(session, album_id)
+        ]
+
     client = _client(session)
     try:
         items = await client.get_album_tracks(album_id)
@@ -127,6 +181,20 @@ async def album_queue(
 @router.get("/track/{item_id}/info", response_model=PlayableTrack)
 async def track_info(item_id: str, session: SessionDep, user: CurrentUser) -> PlayableTrack:
     _require_enabled(session)
+
+    if mode_service.is_local(session):
+        row = local_library.find_track(session, item_id)
+        if row is None:
+            raise HTTPException(status_code=404, detail="Unknown track")
+        album = (
+            session.execute(
+                select(LibraryAlbum).where(LibraryAlbum.jellyfin_id == row.album_item_id)
+            )
+            .scalars()
+            .first()
+        )
+        return _local_playable(session, row, album)
+
     client = _client(session)
     try:
         item = await client.get_item(item_id)
@@ -254,22 +322,71 @@ async def _describe_refusal(response: httpx.Response, item_id: str) -> str:
     return f"Jellyfin refused the stream (HTTP {code}){hint}"
 
 
+def _serve_transcoded(path: Path, config: Any, start: float) -> StreamingResponse:
+    """Re-encode on the fly for a container the browser will not take.
+
+    The response is deliberately not byte addressable: the length is unknown
+    until the file has gone through ffmpeg, so a Range request could not be
+    answered honestly. The player restarts the stream at an offset instead.
+    """
+    fmt = config.transcode_format if config.transcode_format in transcode_service.FORMATS else "mp3"
+    return StreamingResponse(
+        transcode_service.stream(path, fmt=fmt, start=start),
+        media_type=transcode_service.content_type(fmt),
+        headers={"Accept-Ranges": "none", "Cache-Control": "no-store"},
+    )
+
+
+def _stream_local_track(
+    session: Session, item_id: str, request: Request, config: Any, start: float
+) -> StreamingResponse:
+    row = local_library.find_track(session, item_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Unknown track")
+
+    path = _local_file(session, row)
+    if path is None:
+        raise HTTPException(
+            status_code=404,
+            detail="This file is no longer where the last scan saw it; run a library scan",
+        )
+
+    if localmedia.is_browser_playable(path):
+        return _serve_local(path, request)
+    if not config.transcode:
+        raise HTTPException(
+            status_code=415,
+            detail=f"A {path.suffix.lstrip('.').upper()} file cannot be played in a browser, "
+            "and transcoding is switched off",
+        )
+    if not transcode_service.available():
+        raise HTTPException(
+            status_code=503, detail="ffmpeg is missing, this format cannot be transcoded"
+        )
+    return _serve_transcoded(path, config, start)
+
+
 @router.get("/track/{item_id}")
 async def stream_track(
     item_id: str,
     request: Request,
     session: SessionDep,
     token: str | None = Query(default=None),
+    start: float = Query(default=0.0, ge=0, description="Seconds to skip in a transcoded stream"),
 ) -> StreamingResponse:
     """Stream one track, from disk when possible and through Jellyfin otherwise.
 
     Reading the file directly avoids a round trip and every Jellyfin playback
     quirk (session policy, transcoding profile, expired token); the proxy stays
     for the containers a browser cannot decode and for a library Muzikk only
-    sees through Jellyfin.
+    sees through Jellyfin. Without Jellyfin, ffmpeg takes that last role.
     """
     user = authorize_media(request, session, token)
     config = _require_enabled(session)
+
+    if mode_service.is_local(session):
+        return _stream_local_track(session, item_id, request, config, start)
+
     client = _client(session)
 
     item: dict[str, Any] = {}
@@ -345,7 +462,7 @@ async def stream_track(
 
 def _preview_country(session: Session) -> str:
     """Which iTunes store to ask, guessed from the interface language."""
-    language = (settings_service.load(session, "general").default_language or "fr").strip()
+    language = (settings_service.load(session, "general").default_language or "en").strip()
     return (language[:2] or "fr").upper()
 
 
@@ -477,6 +594,10 @@ async def report(
     """Mirror the playback state into Jellyfin so it counts as listened."""
     config = _require_enabled(session)
     if not config.report_playback:
+        return {"reported": False}
+    if mode_service.is_local(session):
+        # There is no other server to tell; the play stays between the
+        # listener and their browser.
         return {"reported": False}
 
     token = users_service.jellyfin_token(user)

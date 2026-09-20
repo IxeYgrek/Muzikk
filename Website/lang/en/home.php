@@ -19,31 +19,31 @@ return [
             'Lossless first',
             'Jellyfin accounts',
         ],
+        'credit' => 'This project (website and application) was entirely coded with Claude Opus',
     ],
 
     'intro' => [
         'eyebrow' => 'What it is',
-        'title' => 'A request manager for music, in the spirit of Overseerr',
+        'title' => 'A request manager for music, inspired by DroppedNeedle (formerly MusicSeerr) and Seerr',
         'paragraphs' => [
             'Your users search a real catalogue rather than a scraped index, see at a glance what the '
                 . 'library already holds, and request whole albums. Muzikk queries each source in the order '
                 . 'you chose, scores every candidate it gets back, and only downloads one it can defend.',
             'What arrives is verified, tagged from MusicBrainz, given its artwork and filed where Jellyfin '
-                . 'expects it. FastAPI serves both the API and the interface, an internal worker drains a '
-                . 'queue kept in SQLite. No Redis, no Postgres, nothing to babysit.',
+                . 'expects it.',
         ],
         'highlights' => [
             [
-                'icon' => 'box',
-                'title' => 'One container to run',
-                'text' => 'FastAPI, the React interface and the background worker ship together. '
-                    . 'Three volumes, and you are done.',
+                'icon' => 'headphones',
+                'title' => 'Complete musical toolkit',
+                'text' => 'Browse your library with Jellyfin, search for new music with MusicBrainz, '
+                    . 'and download using Soulseek and BitTorrent (with Prowlarr support).',
             ],
             [
-                'icon' => 'shield',
-                'title' => 'Jellyfin is the gatekeeper',
-                'text' => 'No second password to manage. Jellyfin administrators become Muzikk '
-                    . 'administrators, and secrets are encrypted at rest.',
+                'icon' => 'tag',
+                'title' => 'Metadata manager',
+                'text' => 'Inspired by MusicBrainz Picard, manage metadata directly from the Muzikk '
+                    . 'interface.',
             ],
             [
                 'icon' => 'waveform',
@@ -69,12 +69,8 @@ return [
                 'items' => [
                     'Runs against your own <strong>self-hosted MusicBrainz server</strong> first, with '
                         . 'musicbrainz.org kept as an automatic fallback when it is unreachable.',
-                    'Separate rate limits for the local instance and the public server, so neither is '
-                        . 'ever hammered.',
                     'Search by <strong>album</strong>, by <strong>track</strong>, by <strong>artist</strong> '
                         . 'or by <strong>label</strong> — a label page unfolds its entire catalogue, ready to request.',
-                    'A song title is enough: track search finds the album that contains it, in your library '
-                        . 'and in MusicBrainz alike.',
                     'Cover art from the <strong>MusicBrainz Cover Art Archive</strong>, cached on disk and '
                         . 'resized once, with the release falling back to its release group.',
                     '<strong>AcoustID</strong> support: an audio fingerprint identifies a folder whose tags '
@@ -102,13 +98,8 @@ return [
                         . 'through the API and the browser never receives a Jellyfin token.',
                     '<strong>Full Jellyfin playlist management</strong>: listen, create, delete, add a single '
                         . 'track or a whole album in disc and track order, and remove a track.',
-                    'Playlists are written with the listener\'s own token, never the server API key, so a '
-                        . 'list created from Muzikk is an ordinary Jellyfin playlist visible in every client.',
-                    'Plays can be reported back to Jellyfin, credited to the listener who started them.',
                     '<strong>Thirty second previews</strong> from Deezer, then iTunes, for a track you do not '
                         . 'own yet — relayed by the API, so the browser contacts neither service.',
-                    'A background index keeps the ownership badges fresh, and a Jellyfin rescan is '
-                        . 'triggered once an album has been filed.',
                 ],
             ],
             [
@@ -128,22 +119,9 @@ return [
                     'Every candidate is scored on artist and title similarity, track count, track titles, '
                         . 'detected format, size per track and seeders or peer speed. Below the threshold, '
                         . 'Muzikk moves on.',
-                    'A torrent\'s file list is read <strong>before</strong> the torrent is handed to '
-                        . 'qBittorrent, which is what kills most false positives.',
-                    'Up to four search wordings are tried per provider, each dropping something a peer may '
-                        . 'not have written — release type first, then edition mentions.',
-                    'The slskd download folder is inspected before any search: an album already sitting '
-                        . 'there complete is imported without touching the network.',
                     'After download: integrity check with <code>flac -t</code> or <code>ffmpeg</code>, full '
                         . 'MusicBrainz tagging, embedded artwork and <code>cover.jpg</code>, filing under your '
                         . 'naming template, a hardlink so seeding continues, then a Jellyfin rescan.',
-                    'An upgrade pauses for approval before anything is deleted: both versions are listed '
-                        . 'file by file with format, bitrate, resolution, duration and size, and each side '
-                        . 'has a play button so you can actually compare them.',
-                    'Failures are retried on their own schedule, and everything can be requeued at once '
-                        . 'from the requests page.',
-                    'Each request keeps a log of every candidate evaluated, its score and the reason it '
-                        . 'was turned down, streamed live over server-sent events.',
                     '<strong>Artist watchlist and wishlist</strong> list what is missing without ever '
                         . 'downloading it by themselves — new releases only, or a whole discography, per artist.',
                     '<strong>Local import</strong>: drop an album folder from the home page and Muzikk '
@@ -165,11 +143,6 @@ return [
                                 . 'groups files per album folder and folds multi-disc sets back together.',
                             'Flags seven anomalies: no MusicBrainz tag, uncertain match, no artwork, '
                                 . 'incomplete tags, doubled tags, duplicate album, missing from Jellyfin.',
-                            'Every pass leaves a report: folders found, folders kept, and exactly why the '
-                                . 'others were skipped, with the first offenders named.',
-                            'Runs in the background worker, so it survives a closed tab and even a container '
-                                . 'restart, which requeues it.',
-                            'Optional nightly analysis at an hour you choose.',
                             'Filter by anomaly, search by album, artist or path, and follow each album '
                                 . 'through three states: to fix, fixed, ignored.',
                         ],
@@ -178,7 +151,6 @@ return [
                         'title' => 'Identification',
                         'items' => [
                             'Search MusicBrainz for the album, every candidate carrying a relevance score.',
-                            'Force the search wording when the folder is named oddly.',
                             'Paste a MusicBrainz <strong>MBID or URL</strong> — Muzikk tries it as a release '
                                 . 'group, then as a release.',
                             '<strong>AcoustID audio fingerprint</strong> over a configurable number of '
@@ -191,28 +163,17 @@ return [
                         'items' => [
                             '<strong>Simulate first</strong>: every field, before and after, file by file, '
                                 . 'with a count of what would change.',
-                            'Read every tag of a single track, value by value, the way Picard shows them. '
-                                . 'A field written twice appears twice, in amber.',
                             'A full Picard-style tag set is written: titles, artists, album artist, date and '
                                 . 'original date, track and disc numbers with their totals, up to eight genres, '
                                 . 'label, catalogue number, barcode, ISRC, media, release country, status and '
                                 . 'type, sort names, compilation flag and every MusicBrainz identifier.',
-                            'Per container: Vorbis comments for FLAC, Ogg and Opus, ID3 for MP3, WAV and '
-                                . 'AIFF, iTunes atoms for MP4, M4A and ALAC, and WM attributes read for WMA.',
-                            'Files are paired to the tracklist by number, by name, then by fuzzy title, and '
-                                . 'anything left unpaired is reported instead of guessed.',
                             'Artwork from the Cover Art Archive, embedded in the files and written as '
                                 . '<code>cover.jpg</code> and <code>folder.jpg</code> — each one a separate toggle.',
-                            'Writing is destructive and says so: one explicit confirmation per album, '
-                                . 'never a silent batch.',
                         ],
                     ],
                     [
                         'title' => 'Jellyfin reconciliation',
                         'items' => [
-                            '<strong>Pair up the artwork files</strong> so every album folder holds both '
-                                . '<code>cover.jpg</code> and <code>folder.jpg</code>, copying whichever exists '
-                                . 'and extracting the embedded picture when neither does.',
                             '<strong>Repair the Jellyfin covers</strong>: ask Jellyfin to look again, then '
                                 . 'upload the image directly for the albums still showing empty — from the '
                                 . 'folder, then the tags, then the Cover Art Archive.',
@@ -283,7 +244,6 @@ return [
                                 . 'multi-disc set and a compilation.',
                             'Library folder, replacement character for unsafe ones, maximum component '
                                 . 'length, and the name used for compilations.',
-                            'Hardlinks when the filesystem allows them, so Soulseek downloads keep seeding.',
                             'Whether an upgrade deletes the old copy, and whether that deletion needs '
                                 . 'validating first.',
                         ],

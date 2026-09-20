@@ -18,7 +18,9 @@ from ..schemas import (
     RequestListResponse,
     RequestOut,
 )
+from ..jobs import queue
 from ..services import catalog, clients
+from ..services import mode as mode_service
 from ..services import requests as requests_service
 from ..services import settings as settings_service
 from ..services.base import ServiceError
@@ -238,7 +240,11 @@ async def cancel(request_id: int, session: SessionDep, user: CurrentUser) -> Req
 
 
 async def _rescan_library(session: Session) -> None:
-    """Tell Jellyfin the folder changed, without making the caller wait on it."""
+    """Note that the folder changed, without making the caller wait on it."""
+    if mode_service.is_local(session):
+        queue.enqueue(session, queue.LIBRARY_SYNC, priority=2)
+        return
+
     jellyfin_settings = settings_service.load(session, "jellyfin")
     client = clients.jellyfin(session)
     if not jellyfin_settings.trigger_scan_on_import or not client.api_key:

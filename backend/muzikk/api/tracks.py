@@ -16,15 +16,51 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..matching.normalize import fuzzy_key
-from ..models import LibraryAlbum
+from ..models import LibraryAlbum, LibraryTrack
 from ..schemas import TrackSearchResponse, TrackSearchResult
-from ..services import catalog, clients
+from ..services import catalog, clients, local_library
+from ..services import mode as mode_service
 from ..services.base import ServiceError
 from .deps import CurrentUser, SessionDep
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/tracks", tags=["tracks"])
+
+
+def _local_results(session: Session, rows: list[LibraryTrack]) -> list[TrackSearchResult]:
+    """Shape rows of the local index the way the Jellyfin ones are shaped."""
+    wanted = {row.album_item_id for row in rows}
+    albums = {
+        album.jellyfin_id: album
+        for album in session.execute(
+            select(LibraryAlbum).where(LibraryAlbum.jellyfin_id.in_(wanted))
+        ).scalars()
+    }
+
+    results: list[TrackSearchResult] = []
+    for row in rows:
+        album = albums.get(row.album_item_id)
+        results.append(
+            TrackSearchResult(
+                title=row.title,
+                artist=row.artist or (album.album_artist if album else ""),
+                album=row.album or (album.name if album else ""),
+                year=album.year if album else None,
+                duration=row.duration,
+                owned=True,
+                jellyfin_id=row.item_id,
+                album_jellyfin_id=row.album_item_id,
+                release_group_mbid=album.release_group_mbid if album else None,
+                recording_mbid=row.recording_mbid,
+                cover_url=catalog.cover_url(
+                    album.release_group_mbid if album else None,
+                    album.release_mbid if album else None,
+                    row.album_item_id,
+                ),
+            )
+        )
+    return results
 
 
 def _library_results(
@@ -140,13 +176,16 @@ async def search_tracks(
     errors: list[str] = []
 
     if scope in ("all", "library"):
-        jellyfin = clients.jellyfin(session)
-        if jellyfin.configured and jellyfin.api_key:
-            try:
-                items = await jellyfin.search_audio(query, limit=limit)
-                results.extend(_library_results(session, items))
-            except ServiceError as exc:
-                errors.append(f"Jellyfin: {exc.message}")
+        if mode_service.is_local(session):
+            results.extend(_local_results(session, local_library.search_tracks(session, query, limit=limit)))
+        else:
+            jellyfin = clients.jellyfin(session)
+            if jellyfin.configured and jellyfin.api_key:
+                try:
+                    items = await jellyfin.search_audio(query, limit=limit)
+                    results.extend(_library_results(session, items))
+                except ServiceError as exc:
+                    errors.append(f"Jellyfin: {exc.message}")
 
     if scope in ("all", "musicbrainz"):
         client = clients.musicbrainz(session)
@@ -172,7 +211,11 @@ async def search_tracks(
 async def album_tracks(
     album_id: str, session: SessionDep, user: CurrentUser
 ) -> TrackSearchResponse:
-    """Track list of an album we own, read from Jellyfin."""
+    """Track list of an album we own."""
+    if mode_service.is_local(session):
+        results = _local_results(session, local_library.album_tracks(session, album_id))
+        return TrackSearchResponse(count=len(results), items=results)
+
     jellyfin = clients.jellyfin(session)
     if not jellyfin.configured or not jellyfin.api_key:
         raise HTTPException(status_code=400, detail="Jellyfin is not configured")

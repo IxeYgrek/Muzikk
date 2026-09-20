@@ -102,7 +102,15 @@ class User(Base):
     __tablename__ = "user"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    jellyfin_user_id: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    # Exactly one of the two is set, depending on the mode the install was
+    # built in: an account comes either from Jellyfin or from Muzikk itself.
+    jellyfin_user_id: Mapped[str | None] = mapped_column(
+        String(64), unique=True, index=True, nullable=True
+    )
+    username: Mapped[str | None] = mapped_column(
+        String(64), unique=True, index=True, nullable=True
+    )
+    password_hash: Mapped[str | None] = mapped_column(Text, nullable=True)
     name: Mapped[str] = mapped_column(String(255))
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -241,6 +249,10 @@ class LibraryAlbum(Base):
     __tablename__ = "library_album"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    # The album identifier the whole application passes around: a Jellyfin
+    # GUID in Jellyfin mode, a "local:" key derived from the folder path in
+    # local mode. Nothing downstream ever reads it, only compares it, which is
+    # what lets both modes share every table and every route below this line.
     jellyfin_id: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     name: Mapped[str] = mapped_column(String(500))
     album_artist: Mapped[str] = mapped_column(String(500), default="")
@@ -273,6 +285,40 @@ class LibraryArtist(Base):
     album_count: Mapped[int] = mapped_column(Integer, default=0)
     image_tag: Mapped[str | None] = mapped_column(String(64), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+
+
+class LibraryTrack(Base):
+    """One audio file of the library, as the local scanner read it.
+
+    Filled by the local mode only. In Jellyfin mode the tracklist of an album
+    is asked to Jellyfin, which knows its own library better than a folder
+    listing ever could, so the table simply stays empty.
+    """
+
+    __tablename__ = "library_track"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    item_id: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    album_item_id: Mapped[str] = mapped_column(String(64), index=True)
+    path: Mapped[str] = mapped_column(String(1000), unique=True, index=True)
+
+    title: Mapped[str] = mapped_column(String(500), default="")
+    artist: Mapped[str] = mapped_column(String(500), default="")
+    album: Mapped[str] = mapped_column(String(500), default="")
+    track: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    disc: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    duration: Mapped[float | None] = mapped_column(Float, nullable=True)
+    container: Mapped[str] = mapped_column(String(16), default="")
+    is_lossless: Mapped[bool] = mapped_column(Boolean, default=False)
+    recording_mbid: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+    # Size and modification time let a rescan skip every file that did not
+    # move, which is what turns a full walk into a few seconds.
+    size: Mapped[int] = mapped_column(Integer, default=0)
+    mtime: Mapped[float] = mapped_column(Float, default=0.0)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+
+    __table_args__ = (Index("ix_library_track_album_order", "album_item_id", "disc", "track"),)
 
 
 class MetadataAlbum(Base):

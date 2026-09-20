@@ -137,9 +137,17 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
 }
 
 /** Same idea for <audio>, which cannot send an Authorization header either. */
-export function streamUrl(path: string): string {
+export function streamUrl(path: string, extra?: Record<string, string | number>): string {
+  const params = new URLSearchParams()
   const token = getToken()
-  return token ? `${path}${path.includes('?') ? '&' : '?'}token=${encodeURIComponent(token)}` : path
+  if (token) params.set('token', token)
+  if (extra) {
+    for (const [key, value] of Object.entries(extra)) {
+      params.set(key, String(value))
+    }
+  }
+  const serialized = params.toString()
+  return serialized ? `${path}${path.includes('?') ? '&' : '?'}${serialized}` : path
 }
 
 /**

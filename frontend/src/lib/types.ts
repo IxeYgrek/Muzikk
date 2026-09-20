@@ -90,9 +90,14 @@ export type LabelDetail = {
   offset: number
 }
 
+/** Which backend owns the accounts and the library on this installation. */
+export type Mode = 'jellyfin' | 'local'
+
 export type User = {
   id: number
-  jellyfin_user_id: string
+  /** Set in Jellyfin mode only; `username` takes its place in local mode. */
+  jellyfin_user_id: string | null
+  username: string | null
   name: string
   is_admin: boolean
   is_enabled: boolean
@@ -623,6 +628,10 @@ export type PlayableTrack = {
   cover_url: string | null
   /** 'deezer' or 'itunes' when this entry is an extract. */
   preview?: string | null
+  /** Re-encoded on the fly: the stream cannot be seeked into, only restarted. */
+  transcoded?: boolean
+  /** False when nothing on the server can decode this file for the browser. */
+  playable?: boolean
   stream_url: string
 }
 
@@ -661,11 +670,13 @@ export type Health = {
   status: string
   version: string
   setup_required: boolean
+  mode: Mode
   services: Record<string, boolean>
 }
 
 export type SetupStatus = {
   setup_completed: boolean
+  mode: Mode
   jellyfin_configured: boolean
   users: number
 }
@@ -692,6 +703,7 @@ export type JobRow = {
 
 export type SystemInfo = {
   version: string
+  mode: Mode
   config_dir: string
   music_dir: string
   worker_concurrency: number

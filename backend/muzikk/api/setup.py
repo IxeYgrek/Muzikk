@@ -1,13 +1,16 @@
 """First run wizard.
 
-Muzikk authenticates against Jellyfin, so nobody can log in before Jellyfin is
-configured. These endpoints are therefore open until the wizard is completed,
-after which they refuse every call.
+Nobody can log in before Muzikk knows where its accounts come from, so these
+endpoints are open until the wizard is completed, after which they refuse
+every call. The first question they ask is the only one that cannot be
+revisited later: whether Jellyfin owns the users and the library, or whether
+Muzikk handles both on its own.
 """
 
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Body, HTTPException, status
@@ -16,6 +19,7 @@ from sqlalchemy import func, select
 from ..jobs import queue
 from ..models import User
 from ..schemas import TestResult
+from ..services import mode as mode_service
 from ..services import settings as settings_service
 from ..services import users as users_service
 from ..services.base import ServiceError
@@ -36,6 +40,33 @@ def _guard(session: SessionDep) -> None:
         )
 
 
+def _require_jellyfin_mode(session: SessionDep) -> None:
+    if mode_service.is_local(session):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This installation is being set up without Jellyfin",
+        )
+
+
+def _music_dir(payload: dict[str, Any]) -> str:
+    """The library folder, checked before it becomes the whole library.
+
+    An empty folder is fine, a fresh install has nothing in it yet. A folder
+    Muzikk cannot see is not: in local mode it would leave the interface
+    permanently empty with no explanation.
+    """
+    value = str(payload.get("music_dir") or "").strip()
+    if not value:
+        raise HTTPException(status_code=422, detail="A music folder is required")
+    if not Path(value).is_dir():
+        raise HTTPException(
+            status_code=422,
+            detail=f'Muzikk cannot see the folder "{value}": check the volume mounted '
+            "on the container",
+        )
+    return value
+
+
 @router.get("/status")
 async def setup_status(session: SessionDep) -> dict[str, Any]:
     general = settings_service.load(session, "general")
@@ -43,9 +74,22 @@ async def setup_status(session: SessionDep) -> dict[str, Any]:
     users = session.execute(select(func.count()).select_from(User)).scalar() or 0
     return {
         "setup_completed": general.setup_completed,
+        "mode": mode_service.current(session),
         "jellyfin_configured": bool(jellyfin.url and jellyfin.api_key),
         "users": users,
     }
+
+
+@router.post("/mode")
+async def choose_mode(
+    session: SessionDep, payload: dict[str, Any] = Body(default_factory=dict)
+) -> dict[str, Any]:
+    _guard(session)
+    value = str(payload.get("mode") or "").strip().lower()
+    if value not in mode_service.MODES:
+        raise HTTPException(status_code=422, detail="Unknown mode")
+    settings_service.save(session, "general", {"mode": value})
+    return {"mode": value}
 
 
 @router.post("/jellyfin", response_model=TestResult)
@@ -53,6 +97,7 @@ async def configure_jellyfin(
     session: SessionDep, payload: dict[str, Any] = Body(default_factory=dict)
 ) -> TestResult:
     _guard(session)
+    _require_jellyfin_mode(session)
     url = str(payload.get("url") or "").strip()
     api_key = str(payload.get("api_key") or "").strip()
     if not url or not api_key:
@@ -79,6 +124,7 @@ async def configure_jellyfin(
 @router.get("/libraries")
 async def setup_libraries(session: SessionDep) -> list[dict[str, Any]]:
     _guard(session)
+    _require_jellyfin_mode(session)
     jellyfin = settings_service.load(session, "jellyfin")
     if not jellyfin.url or not jellyfin.api_key:
         raise HTTPException(status_code=400, detail="Configure Jellyfin first")
@@ -88,11 +134,7 @@ async def setup_libraries(session: SessionDep) -> list[dict[str, Any]]:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=exc.message) from exc
 
 
-@router.post("/finish")
-async def finish_setup(
-    session: SessionDep, payload: dict[str, Any] = Body(default_factory=dict)
-) -> dict[str, Any]:
-    _guard(session)
+async def _finish_jellyfin(session: SessionDep, payload: dict[str, Any]) -> dict[str, Any]:
     jellyfin = settings_service.load(session, "jellyfin")
     if not jellyfin.url or not jellyfin.api_key:
         raise HTTPException(status_code=400, detail="Configure Jellyfin first")
@@ -115,7 +157,45 @@ async def finish_setup(
             status_code=400,
             detail="No Jellyfin user could be imported; check the API key permissions",
         )
+    return dict(imported)
 
-    settings_service.save(session, "general", {"setup_completed": True})
+
+def _finish_local(session: SessionDep, payload: dict[str, Any]) -> dict[str, Any]:
+    music_dir = _music_dir(payload)
+    existing = session.execute(select(func.count()).select_from(User)).scalar() or 0
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="This installation already has accounts"
+        )
+
+    try:
+        admin = users_service.create_local_user(
+            session,
+            username=str(payload.get("username") or ""),
+            password=str(payload.get("password") or ""),
+            display_name=str(payload.get("name") or ""),
+            is_admin=True,
+        )
+    except users_service.AccountError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    settings_service.save(session, "naming", {"music_dir": music_dir})
+    return {"administrator": admin.username, "music_dir": music_dir}
+
+
+@router.post("/finish")
+async def finish_setup(
+    session: SessionDep, payload: dict[str, Any] = Body(default_factory=dict)
+) -> dict[str, Any]:
+    _guard(session)
+    if mode_service.is_local(session):
+        result = _finish_local(session, payload)
+    else:
+        result = await _finish_jellyfin(session, payload)
+
+    language = str(payload.get("language") or "en").strip().lower()
+    if language not in ("fr", "en"):
+        language = "en"
+    settings_service.save(session, "general", {"setup_completed": True, "default_language": language})
     queue.enqueue(session, queue.LIBRARY_SYNC)
-    return {"ok": True, **imported}
+    return {"ok": True, **result}

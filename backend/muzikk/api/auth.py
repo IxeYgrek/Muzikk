@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Response, status
 
-from ..schemas import LoginRequest, SessionOut, UserOut
-from ..security import create_access_token
+from ..schemas import LoginRequest, PasswordChange, SessionOut, UserOut
+from ..security import create_access_token, verify_password
+from ..services import mode as mode_service
 from ..services import settings as settings_service
 from ..services import users as users_service
 from ..services.jellyfin import JellyfinClient
@@ -60,9 +61,35 @@ async def me(user: CurrentUser, session: SessionDep) -> SessionOut:
     )
 
 
+@router.post("/password")
+async def change_password(
+    payload: PasswordChange, user: CurrentUser, session: SessionDep
+) -> dict[str, bool]:
+    """Let a local account change its own password."""
+    if user.username is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This account is managed by Jellyfin, change its password there",
+        )
+    if not verify_password(payload.current_password, user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="The current password is wrong"
+        )
+    try:
+        users_service.set_password(session, user, payload.password)
+    except users_service.AccountError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {"ok": True}
+
+
 @router.get("/server")
 async def server_info(session: SessionDep) -> dict[str, object]:
     """Public information used by the login screen."""
+    active_mode = mode_service.current(session)
+    if active_mode == mode_service.LOCAL:
+        # Nothing to probe: the accounts live here.
+        return {"mode": active_mode, "jellyfin_configured": False, "jellyfin_server_name": None}
+
     jellyfin_settings = settings_service.load(session, "jellyfin")
     configured = bool(jellyfin_settings.url)
     server_name = None
@@ -72,4 +99,8 @@ async def server_info(session: SessionDep) -> dict[str, object]:
             server_name = (info or {}).get("ServerName")
         except Exception:  # noqa: BLE001 - the login page must render regardless
             server_name = None
-    return {"jellyfin_configured": configured, "jellyfin_server_name": server_name}
+    return {
+        "mode": active_mode,
+        "jellyfin_configured": configured,
+        "jellyfin_server_name": server_name,
+    }

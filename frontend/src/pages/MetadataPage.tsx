@@ -37,6 +37,7 @@ import {
 } from '../components/ui'
 import { ApiError, api } from '../lib/api'
 import { relativeTime } from '../lib/format'
+import { useLocalMode } from '../lib/hooks'
 import type {
   ArtworkSyncReport,
   JellyfinCoverReport,
@@ -73,6 +74,8 @@ export function MetadataPage() {
   const { t } = useTranslation()
   const { notify } = useToast()
   const queryClient = useQueryClient()
+  const localMode = useLocalMode()
+  const issueKinds = ISSUE_ORDER.filter((kind) => kind !== 'not_in_jellyfin' || !localMode)
 
   const [issue, setIssue] = useState('')
   const [state, setState] = useState('open')
@@ -189,16 +192,18 @@ export function MetadataPage() {
           <p className="mt-1 text-sm text-ink-400">{t('metadata.subtitle')}</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button
-            variant="secondary"
-            size="sm"
-            loading={refreshJellyfin.isPending}
-            onClick={() => refreshJellyfin.mutate()}
-            title={t('metadata.jellyfinRefreshHint')}
-          >
-            <RefreshCw className="size-3.5" />
-            {t('metadata.jellyfinRefresh')}
-          </Button>
+          {!localMode && (
+            <Button
+              variant="secondary"
+              size="sm"
+              loading={refreshJellyfin.isPending}
+              onClick={() => refreshJellyfin.mutate()}
+              title={t('metadata.jellyfinRefreshHint')}
+            >
+              <RefreshCw className="size-3.5" />
+              {t('metadata.jellyfinRefresh')}
+            </Button>
+          )}
           <Button
             variant="secondary"
             size="sm"
@@ -209,26 +214,30 @@ export function MetadataPage() {
             <Images className="size-3.5" />
             {pairing ? t('metadata.artworkRunning') : t('metadata.artwork')}
           </Button>
-          <Button
-            variant="secondary"
-            size="sm"
-            loading={jellyfinCovers.isPending || repairing}
-            onClick={() => jellyfinCovers.mutate()}
-            title={t('metadata.coversHint')}
-          >
-            <ImageUp className="size-3.5" />
-            {repairing ? t('metadata.coversRunning') : t('metadata.covers')}
-          </Button>
-          <Button
-            variant="secondary"
-            size="sm"
-            loading={jellyfinMeta.isPending || aligning}
-            onClick={() => jellyfinMeta.mutate()}
-            title={t('metadata.alignHint')}
-          >
-            <Replace className="size-3.5" />
-            {aligning ? t('metadata.alignRunning') : t('metadata.align')}
-          </Button>
+          {!localMode && (
+            <>
+              <Button
+                variant="secondary"
+                size="sm"
+                loading={jellyfinCovers.isPending || repairing}
+                onClick={() => jellyfinCovers.mutate()}
+                title={t('metadata.coversHint')}
+              >
+                <ImageUp className="size-3.5" />
+                {repairing ? t('metadata.coversRunning') : t('metadata.covers')}
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                loading={jellyfinMeta.isPending || aligning}
+                onClick={() => jellyfinMeta.mutate()}
+                title={t('metadata.alignHint')}
+              >
+                <Replace className="size-3.5" />
+                {aligning ? t('metadata.alignRunning') : t('metadata.align')}
+              </Button>
+            </>
+          )}
           <Button
             variant="primary"
             size="sm"
@@ -282,27 +291,27 @@ export function MetadataPage() {
         </Alert>
       )}
 
-      {summary.data?.jellyfin_covers_error && !repairing && (
+      {!localMode && summary.data?.jellyfin_covers_error && !repairing && (
         <Alert tone="error">
           <span className="font-semibold">{t('metadata.coversFailed')}</span>{' '}
           <span className="break-words">{summary.data.jellyfin_covers_error}</span>
         </Alert>
       )}
 
-      {summary.data?.last_jellyfin_covers && !repairing && !summary.data.jellyfin_covers_error && (
+      {!localMode && summary.data?.last_jellyfin_covers && !repairing && !summary.data.jellyfin_covers_error && (
         <Alert tone={summary.data.last_jellyfin_covers.failed > 0 ? 'warning' : 'info'}>
           <CoverRepairReport report={summary.data.last_jellyfin_covers} />
         </Alert>
       )}
 
-      {summary.data?.jellyfin_meta_error && !aligning && (
+      {!localMode && summary.data?.jellyfin_meta_error && !aligning && (
         <Alert tone="error">
           <span className="font-semibold">{t('metadata.alignFailed')}</span>{' '}
           <span className="break-words">{summary.data.jellyfin_meta_error}</span>
         </Alert>
       )}
 
-      {summary.data?.last_jellyfin_meta && !aligning && !summary.data.jellyfin_meta_error && (
+      {!localMode && summary.data?.last_jellyfin_meta && !aligning && !summary.data.jellyfin_meta_error && (
         <Alert tone={summary.data.last_jellyfin_meta.failed > 0 ? 'warning' : 'info'}>
           <AlignReport report={summary.data.last_jellyfin_meta} />
         </Alert>
@@ -327,7 +336,9 @@ export function MetadataPage() {
           tone="brand"
           hint={
             summary.data?.library_albums
-              ? t('metadata.inJellyfin', { count: summary.data.library_albums })
+              ? t(localMode ? 'metadata.inLibrary' : 'metadata.inJellyfin', {
+                  count: summary.data.library_albums,
+                })
               : undefined
           }
         />
@@ -367,7 +378,7 @@ export function MetadataPage() {
             {summary.data?.open ?? 0}
           </span>
         </button>
-        {ISSUE_ORDER.map((kind) => {
+        {issueKinds.map((kind) => {
           const Icon = ISSUE_ICONS[kind]
           const count = summary.data?.issues?.[kind] ?? 0
           return (

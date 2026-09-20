@@ -87,6 +87,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const reportedAt = useRef(0)
   const reportedTrack = useRef<string | null>(null)
   const loadedKey = useRef('')
+  // A transcoded stream has no byte index, so a seek restarts ffmpeg at this
+  // offset and the displayed position is offset + currentTime.
+  const transcodeOffset = useRef(0)
 
   const [queue, setQueue] = useState<PlayableTrack[]>([])
   const [index, setIndex] = useState(0)
@@ -145,8 +148,21 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       report('stop', queue.find((item) => item.jellyfin_id === reportedTrack.current) ?? null)
     }
 
+    if (current.playable === false) {
+      transcodeOffset.current = 0
+      audio.removeAttribute('src')
+      audio.load()
+      setLoading(false)
+      setPlaying(false)
+      setPosition(0)
+      setDuration(current.duration ?? 0)
+      setError(current.title)
+      return
+    }
+
     setError(null)
     setLoading(true)
+    transcodeOffset.current = 0
     setPosition(0)
     setDuration(current.duration ?? 0)
     audio.src = streamUrl(current.stream_url)
@@ -209,16 +225,24 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     const onCanPlay = () => setLoading(false)
     const onPause = () => setPlaying(false)
     const onTime = () => {
-      setPosition(audio.currentTime)
+      const track = queue[index] ?? null
+      const elapsed = track?.transcoded
+        ? transcodeOffset.current + audio.currentTime
+        : audio.currentTime
+      setPosition(elapsed)
       // Sound is coming out, whatever the events said: nothing is loading.
       if (!audio.paused) setLoading(false)
       if (Date.now() - reportedAt.current > REPORT_INTERVAL_MS) {
         reportedAt.current = Date.now()
-        report('progress', queue[index] ?? null)
+        report('progress', track)
       }
     }
     const onMeta = () => {
-      setDuration(Number.isFinite(audio.duration) ? audio.duration : 0)
+      const track = queue[index] ?? null
+      // A re-encoded pipe has no known length; keep the tag duration.
+      if (!track?.transcoded && Number.isFinite(audio.duration)) {
+        setDuration(audio.duration)
+      }
       setLoading(false)
     }
     const onEnded = () => {
@@ -298,7 +322,14 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       // loading effect stays quiet: restart it by hand.
       const audio = audioRef.current
       if (again && audio) {
-        audio.currentTime = 0
+        const same = tracks[target]
+        if (same?.transcoded) {
+          transcodeOffset.current = 0
+          audio.src = streamUrl(same.stream_url)
+          audio.load()
+        } else {
+          audio.currentTime = 0
+        }
         void audio.play().catch(() => setPlaying(false))
       }
     },
@@ -346,19 +377,34 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const seek = useCallback((seconds: number) => {
     const audio = audioRef.current
     if (!audio) return
-    audio.currentTime = Math.max(0, seconds)
+    const track = queue[index] ?? null
+    const target = Math.max(0, seconds)
+    if (track?.transcoded) {
+      transcodeOffset.current = target
+      setPosition(target)
+      setLoading(true)
+      audio.src = streamUrl(track.stream_url, { start: target.toFixed(3) })
+      audio.load()
+      void audio.play().catch(() => {
+        setPlaying(false)
+        setLoading(false)
+      })
+      return
+    }
+    audio.currentTime = target
     setPosition(audio.currentTime)
-  }, [])
+  }, [index, queue])
 
   const previous = useCallback(() => {
     const audio = audioRef.current
+    const elapsed = transcodeOffset.current + (audio?.currentTime ?? 0)
     // Restart the track first, like every other player does.
-    if (audio && audio.currentTime > 3) {
-      audio.currentTime = 0
+    if (audio && elapsed > 3) {
+      seek(0)
       return
     }
     advance(-1)
-  }, [advance])
+  }, [advance, seek])
 
   const toggleShuffle = useCallback(() => {
     setShuffle((value) => {

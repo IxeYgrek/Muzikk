@@ -6,7 +6,7 @@ import logging
 from typing import Any
 
 from fastapi import APIRouter, Body, HTTPException, Query, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from .. import __version__
@@ -21,13 +21,16 @@ from ..schemas import (
     IndexerUpdate,
     NamingPreviewOut,
     NamingPreviewRequest,
+    PasswordReset,
     TestResult,
+    UserCreate,
     UserOut,
     UserUpdate,
 )
 from ..security import MASK
 from ..services import coverart
 from ..services import indexers as indexers_service
+from ..services import mode as mode_service
 from ..services import settings as settings_service
 from ..services import users as users_service
 from ..services.base import ServiceError
@@ -81,6 +84,15 @@ async def update_settings(
 ) -> dict[str, Any]:
     if section not in settings_service.SECTION_MODELS:
         raise HTTPException(status_code=404, detail="Unknown settings section")
+    if section == "jellyfin" and mode_service.is_local(session):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This installation runs without Jellyfin",
+        )
+    # The mode is decided once, by the wizard. Flipping it on a live install
+    # would strand every account: a Jellyfin one has no password stored here,
+    # a local one has no Jellyfin identity there.
+    payload.pop("mode", None)
     previous = settings_service.load(session, section)
     try:
         updated = settings_service.save(session, section, payload)
@@ -110,6 +122,8 @@ async def test_service(
     admin: AdminUser,
     overrides: dict[str, Any] = Body(default_factory=dict),
 ) -> TestResult:
+    if service == "jellyfin" and mode_service.is_local(session):
+        return TestResult(ok=False, message="This installation runs without Jellyfin")
     try:
         if service == "jellyfin":
             client = JellyfinClient(_section_with_overrides(session, "jellyfin", overrides))
@@ -206,6 +220,10 @@ async def jellyfin_libraries(
     admin: AdminUser,
     overrides: dict[str, Any] = Body(default_factory=dict),
 ) -> list[dict[str, Any]]:
+    if mode_service.is_local(session):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="This installation runs without Jellyfin"
+        )
     client = JellyfinClient(_section_with_overrides(session, "jellyfin", overrides))
     try:
         return await client.get_music_libraries()
@@ -216,10 +234,50 @@ async def jellyfin_libraries(
 # -------------------------------------------------------------------- users
 
 
+def _require_local_accounts(session: Session) -> None:
+    if not mode_service.is_local(session):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Accounts come from Jellyfin on this installation",
+        )
+
+
+def _admin_count(session: Session) -> int:
+    return (
+        session.execute(
+            select(func.count())
+            .select_from(User)
+            .where(User.is_admin.is_(True))
+            .where(User.is_enabled.is_(True))
+        ).scalar()
+        or 0
+    )
+
+
 @router.get("/users", response_model=list[UserOut])
 async def list_users(session: SessionDep, admin: AdminUser) -> list[UserOut]:
     rows = session.execute(select(User).order_by(User.name.asc())).scalars().all()
     return [UserOut.model_validate(row) for row in rows]
+
+
+@router.post("/users", response_model=UserOut, status_code=status.HTTP_201_CREATED)
+async def create_user(payload: UserCreate, session: SessionDep, admin: AdminUser) -> UserOut:
+    _require_local_accounts(session)
+    try:
+        user = users_service.create_local_user(
+            session,
+            username=payload.username,
+            password=payload.password,
+            display_name=payload.name,
+            is_admin=payload.is_admin,
+            can_request=payload.can_request,
+            can_upgrade=payload.can_upgrade,
+            can_import=payload.can_import,
+            weekly_quota=payload.weekly_quota,
+        )
+    except users_service.AccountError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return UserOut.model_validate(user)
 
 
 @router.patch("/users/{user_id}", response_model=UserOut)
@@ -231,12 +289,61 @@ async def update_user(
         raise HTTPException(status_code=404, detail="User not found")
     if user.id == admin.id and payload.is_admin is False:
         raise HTTPException(status_code=400, detail="You cannot remove your own admin rights")
+    if user.id == admin.id and payload.is_enabled is False:
+        raise HTTPException(status_code=400, detail="You cannot disable your own account")
 
-    for field, value in payload.model_dump(exclude_unset=True).items():
+    changes = payload.model_dump(exclude_unset=True)
+    username = changes.pop("username", None)
+    if username is not None:
+        try:
+            users_service.rename_local_user(session, user, username)
+        except users_service.AccountError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    display_name = changes.pop("name", None)
+    if display_name is not None:
+        if user.username is None:
+            raise HTTPException(status_code=422, detail="Jellyfin owns the name of this account")
+        if not display_name.strip():
+            raise HTTPException(status_code=422, detail="A display name cannot be empty")
+        user.name = display_name.strip()[:255]
+
+    for field, value in changes.items():
         setattr(user, field, value)
     session.commit()
     session.refresh(user)
     return UserOut.model_validate(user)
+
+
+@router.post("/users/{user_id}/password")
+async def reset_password(
+    user_id: int, payload: PasswordReset, session: SessionDep, admin: AdminUser
+) -> dict[str, bool]:
+    _require_local_accounts(session)
+    user = session.get(User, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    try:
+        users_service.set_password(session, user, payload.password)
+    except users_service.AccountError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {"ok": True}
+
+
+@router.delete("/users/{user_id}")
+async def delete_user(user_id: int, session: SessionDep, admin: AdminUser) -> dict[str, bool]:
+    _require_local_accounts(session)
+    user = session.get(User, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user.id == admin.id:
+        raise HTTPException(status_code=400, detail="You cannot delete your own account")
+    if user.is_admin and _admin_count(session) <= 1:
+        raise HTTPException(status_code=400, detail="The last administrator cannot be deleted")
+    # The requests, follows and wishlist of this account go with it.
+    session.delete(user)
+    session.commit()
+    return {"ok": True}
 
 
 @router.post("/users/sync")
@@ -331,6 +438,8 @@ async def run_job(kind: str, session: SessionDep, admin: AdminUser) -> dict[str,
         queue.RETRY_FAILED,
         queue.PRUNE_EVENTS,
     }
+    if mode_service.is_local(session):
+        allowed.discard(queue.USERS_SYNC)
     if kind not in allowed:
         raise HTTPException(status_code=400, detail="This job cannot be triggered manually")
     job = queue.enqueue(session, kind)
@@ -348,17 +457,23 @@ async def system_info(session: SessionDep, admin: AdminUser) -> dict[str, Any]:
 
     env = get_env_config()
     all_settings = settings_service.load_all(session)
+    active_mode = mode_service.current(session)
+    configured = {
+        "musicbrainz": bool(all_settings["musicbrainz"].url),
+        "slskd": bool(all_settings["slskd"].url and all_settings["slskd"].api_key),
+        "prowlarr": bool(all_settings["prowlarr"].url and all_settings["prowlarr"].api_key),
+        "qbittorrent": bool(all_settings["qbittorrent"].url),
+    }
+    if active_mode == mode_service.JELLYFIN:
+        configured["jellyfin"] = bool(
+            all_settings["jellyfin"].url and all_settings["jellyfin"].api_key
+        )
     return {
         "version": __version__,
+        "mode": active_mode,
         "config_dir": str(env.config_dir),
         "music_dir": all_settings["naming"].music_dir,
         "worker_concurrency": env.worker_concurrency,
-        "configured": {
-            "jellyfin": bool(all_settings["jellyfin"].url and all_settings["jellyfin"].api_key),
-            "musicbrainz": bool(all_settings["musicbrainz"].url),
-            "slskd": bool(all_settings["slskd"].url and all_settings["slskd"].api_key),
-            "prowlarr": bool(all_settings["prowlarr"].url and all_settings["prowlarr"].api_key),
-            "qbittorrent": bool(all_settings["qbittorrent"].url),
-        },
+        "configured": configured,
         "provider_order": all_settings["providers"].order,
     }

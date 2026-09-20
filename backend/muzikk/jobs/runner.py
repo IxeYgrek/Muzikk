@@ -19,8 +19,9 @@ from ..services import coverfiles as coverfiles_service
 from ..services import indexers as indexers_service
 from ..services import jellyfincovers as jellyfincovers_service
 from ..services import jellyfinmeta as jellyfinmeta_service
-from ..services import library_index
+from ..services import library_sync as library_sync_service
 from ..services import metadata as metadata_service
+from ..services import mode as mode_service
 from ..services import settings as settings_service
 from ..services import users as users_service
 from ..services import watchlist as watchlist_service
@@ -47,7 +48,7 @@ async def _resume_download(payload: dict[str, Any]) -> None:
 
 async def _library_sync(_: dict[str, Any]) -> None:
     with session_scope() as session:
-        result = await library_index.sync_library(session)
+        result = await library_sync_service.sync(session)
     logger.info("Library sync finished: %s", result)
 
 
@@ -311,13 +312,25 @@ class Worker:
             try:
                 with session_scope() as session:
                     general = settings_service.load(session, "general")
+                    local = mode_service.is_local(session)
                     jellyfin = settings_service.load(session, "jellyfin")
 
-                    if jellyfin.url and jellyfin.api_key and self._due(
-                        "library", max(5, general.library_scan_interval_minutes) * 60
+                    # In local mode the index is ours to keep fresh. In
+                    # Jellyfin mode there is nothing to pull until the server
+                    # is reachable, and the accounts come along with it.
+                    # Before the wizard finishes the music folder is still
+                    # the default, so a tick would only fail or lock SQLite.
+                    indexable = local or bool(jellyfin.url and jellyfin.api_key)
+                    if (
+                        general.setup_completed
+                        and indexable
+                        and self._due(
+                            "library", max(5, general.library_scan_interval_minutes) * 60
+                        )
                     ):
                         queue.enqueue(session, queue.LIBRARY_SYNC)
-                        queue.enqueue(session, queue.USERS_SYNC)
+                        if not local:
+                            queue.enqueue(session, queue.USERS_SYNC)
 
                     if self._due("watchlist", max(1, general.watchlist_check_interval_hours) * 3600):
                         queue.enqueue(session, queue.WATCHLIST_CHECK)

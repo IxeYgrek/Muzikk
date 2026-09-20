@@ -18,7 +18,7 @@ import {
 } from '../components/ui'
 import { ApiError, api } from '../lib/api'
 import { canRequestUpgrade, useAuth } from '../lib/auth'
-import { useAlbumRequest, useDebounced } from '../lib/hooks'
+import { useAlbumRequest, useDebounced, useLocalMode } from '../lib/hooks'
 import { usePlayer } from '../lib/player'
 import type { LibraryAlbum, LibraryResponse, TrackSearchResponse } from '../lib/types'
 
@@ -35,6 +35,7 @@ type LibraryStats = {
 export function LibraryPage() {
   const { t } = useTranslation()
   const { user } = useAuth()
+  const localMode = useLocalMode()
   const queryClient = useQueryClient()
   const { notify } = useToast()
   const { request, requestByMbid, pendingId } = useAlbumRequest()
@@ -112,7 +113,9 @@ export function LibraryPage() {
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="font-display text-3xl font-bold text-ink-100">{t('library.title')}</h1>
-          <p className="mt-1 text-sm text-ink-400">{t('library.subtitle')}</p>
+          <p className="mt-1 text-sm text-ink-400">
+            {t(localMode ? 'library.subtitleLocal' : 'library.subtitle')}
+          </p>
         </div>
         {user?.is_admin && (
           <Button onClick={() => sync.mutate()} loading={sync.isPending}>

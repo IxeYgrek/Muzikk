@@ -47,6 +47,7 @@ from ..pipeline.importer import (
 )
 from ..pipeline.tagger import TaggingError, write_tags
 from . import artwork
+from . import mode as mode_service
 from . import settings as settings_service
 from . import tags as tags_service
 from .coverart import CoverArtClient
@@ -197,7 +198,7 @@ def common_value(values: list[str]) -> str:
     return max(counts.items(), key=lambda item: (item[1], -first_seen[item[0]]))[0]
 
 
-def _titles_from_path(folder: FolderInfo) -> tuple[str, str, int | None]:
+def titles_from_path(folder: FolderInfo) -> tuple[str, str, int | None]:
     """Guess artist, album and year from the folder layout.
 
     Libraries are almost always laid out as ``Artist/Album (Year)``, which is
@@ -377,7 +378,7 @@ def _examine(folder: FolderInfo, locator: LibraryLocator) -> Finding:
     album_artist = common_value([entry.albumartist for entry in readable]) or common_value(
         [entry.artist for entry in readable]
     )
-    guessed_artist, guessed_title, guessed_year = _titles_from_path(folder)
+    guessed_artist, guessed_title, guessed_year = titles_from_path(folder)
     album_title = album_title or guessed_title
     album_artist = album_artist or guessed_artist
 
@@ -452,7 +453,7 @@ def _from_path_only(folder: FolderInfo, locator: LibraryLocator, reason: str) ->
     Losing the album would be worse than listing it with what the folder name
     says: it stays visible, flagged, and an administrator can act on it.
     """
-    artist, title, year = _titles_from_path(folder)
+    artist, title, year = titles_from_path(folder)
     key = fuzzy_key(artist, title)
     finding = Finding(
         path=str(folder.path),
@@ -585,6 +586,12 @@ async def scan_library(session: Session) -> dict[str, int]:
         locator=locator,
         report=report,
     )
+    if mode_service.is_local(session):
+        # The local scanner is the index: "not in Jellyfin" has no meaning.
+        for finding in findings:
+            finding.issues = [
+                issue for issue in finding.issues if issue != MetadataIssue.NOT_IN_JELLYFIN
+            ]
     logger.info(
         "Metadata walk of %s: %s directories, %s audio files, %s album folders",
         root,
