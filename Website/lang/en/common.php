@@ -8,7 +8,7 @@ declare(strict_types=1);
 return [
     'tagline' => 'Your albums, lossless, effortlessly',
     'description' => 'Muzikk is a self-hosted music request and download manager: MusicBrainz catalogue, '
-        . 'Jellyfin library and playback, Soulseek and BitTorrent acquisition, automatic lossless tagging.',
+        . 'Jellyfin or local library and playback, Soulseek and BitTorrent acquisition, automatic lossless tagging.',
 
     'skipToContent' => 'Skip to content',
     'language' => 'Language',

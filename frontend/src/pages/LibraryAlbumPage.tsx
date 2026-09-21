@@ -7,6 +7,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 
 import { AddToPlaylistModal, type PlaylistTarget } from '../components/AddToPlaylist'
 import { AlbumCover } from '../components/AlbumCard'
+import { MusicBrainzLinks } from '../components/MusicBrainzLinks'
 import { Alert, Button, Card, CenteredSpinner, Chip, EmptyState } from '../components/ui'
 import { ApiError, api } from '../lib/api'
 import { useAuth } from '../lib/auth'
@@ -106,13 +107,19 @@ export function LibraryAlbumPage() {
           )}
 
           {hasCataloguePage(album) ? (
-            <Link
-              to={`/albums/${album.release_group_mbid}`}
-              className="btn btn-ghost w-full justify-center"
-            >
-              <Search className="size-4" />
-              {t('library.openCatalogue')}
-            </Link>
+            <>
+              <Link
+                to={`/albums/${album.release_group_mbid}`}
+                className="btn btn-ghost w-full justify-center"
+              >
+                <Search className="size-4" />
+                {t('library.openCatalogue')}
+              </Link>
+              <MusicBrainzLinks
+                groupMbid={album.release_group_mbid ?? ''}
+                releaseMbid={album.release_mbid}
+              />
+            </>
           ) : (
             <Alert tone="info" className="space-y-2 text-left">
               <p>{t('library.noMbid')}</p>
@@ -148,6 +155,7 @@ export function LibraryAlbumPage() {
               {album.album_artist}
               {album.year ? ` · ${album.year}` : ''}
             </p>
+            {album.label && <p className="mt-1 text-sm text-ink-400">{album.label}</p>}
           </div>
 
           <section>

@@ -163,7 +163,7 @@ class JellyfinClient(HttpService):
     async def get_albums(self, parent_ids: list[str] | None = None) -> list[dict[str, Any]]:
         return await self.iter_items(
             "MusicAlbum",
-            fields="ProviderIds,Path,ChildCount,Genres,DateCreated,ProductionYear,AlbumArtists",
+            fields="ProviderIds,Path,ChildCount,Genres,DateCreated,ProductionYear,AlbumArtists,Studios",
             parent_ids=parent_ids,
         )
 
@@ -278,6 +278,24 @@ class JellyfinClient(HttpService):
         items = (payload or {}).get("Items") or []
         return items[0] if items else {}
 
+    async def find_audio_by_provider(self, name: str, value: str) -> list[dict[str, Any]]:
+        """Audio items carrying a given MusicBrainz (or other) identifier."""
+        if not name or not value:
+            return []
+        user_id = await self._resolve_user_id()
+        params: dict[str, Any] = {
+            "IncludeItemTypes": "Audio",
+            "Recursive": "true",
+            "AnyProviderIdEquals": f"{name}.{value}",
+            "Fields": "Path,ProviderIds,Album,AlbumArtist,Artists",
+            "Limit": 10,
+            "EnableImages": "false",
+        }
+        if user_id:
+            params["userId"] = user_id
+        payload = await self.request("GET", "/Items", params=params, headers=self._api_headers())
+        return (payload or {}).get("Items") or []
+
     # ------------------------------------------------------------ playlists
 
     def _user_headers(self, token: str) -> dict[str, str]:
@@ -324,7 +342,7 @@ class JellyfinClient(HttpService):
         params = {
             "userId": user_id,
             "Fields": (
-                "AlbumId,Container,IndexNumber,ParentIndexNumber,"
+                "AlbumId,Container,IndexNumber,ParentIndexNumber,Path,ProviderIds,"
                 "RunTimeTicks,Album,AlbumArtist,Artists"
             ),
             "Limit": 1000,
@@ -335,8 +353,17 @@ class JellyfinClient(HttpService):
         )
         return (payload or {}).get("Items") or []
 
+    def _playlist_headers(self, token: str | None) -> dict[str, str]:
+        """The listener's token when we have it, the server key otherwise.
+
+        Importing into someone else's account cannot ask for their password:
+        the API key plus ``UserId`` is enough for Jellyfin to file the playlist
+        under that account.
+        """
+        return self._user_headers(token) if token else self._api_headers()
+
     async def create_playlist(
-        self, name: str, *, token: str, user_id: str, item_ids: list[str] | None = None
+        self, name: str, *, user_id: str, item_ids: list[str] | None = None, token: str | None = None
     ) -> str:
         payload = await self.request(
             "POST",
@@ -347,18 +374,23 @@ class JellyfinClient(HttpService):
                 "UserId": user_id,
                 "MediaType": "Audio",
             },
-            headers={**self._user_headers(token), "Content-Type": "application/json"},
+            headers={**self._playlist_headers(token), "Content-Type": "application/json"},
         )
         return str((payload or {}).get("Id") or "")
 
     async def add_to_playlist(
-        self, playlist_id: str, item_ids: list[str], *, token: str, user_id: str
+        self,
+        playlist_id: str,
+        item_ids: list[str],
+        *,
+        user_id: str,
+        token: str | None = None,
     ) -> None:
         await self.request(
             "POST",
             f"/Playlists/{playlist_id}/Items",
             params={"ids": ",".join(item_ids), "userId": user_id},
-            headers=self._user_headers(token),
+            headers=self._playlist_headers(token),
             expect_json=False,
         )
 

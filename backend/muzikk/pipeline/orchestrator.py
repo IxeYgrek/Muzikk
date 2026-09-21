@@ -529,6 +529,13 @@ class Orchestrator:
                     f"{provider.label} unavailable: {exc.message}", level="warning",
                 )
             return False
+        finally:
+            purge = getattr(provider, "purge_searches", None)
+            if callable(purge):
+                try:
+                    await purge()
+                except Exception:  # noqa: BLE001 - leftover searches must not fail the request
+                    logger.debug("unable to purge leftover searches on %s", provider.key)
 
         if not candidates:
             with session_scope() as session:

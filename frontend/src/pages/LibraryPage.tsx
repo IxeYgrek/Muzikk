@@ -1,8 +1,8 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowUpCircle, Disc3, Play, RefreshCw, Search } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 
 import { AlbumCover } from '../components/AlbumCard'
 import { useToast } from '../components/Toast'
@@ -32,6 +32,11 @@ type LibraryStats = {
   artists: number
 }
 
+type LibraryArtist = {
+  name: string
+  album_count: number
+}
+
 export function LibraryPage() {
   const { t } = useTranslation()
   const { user } = useAuth()
@@ -40,14 +45,36 @@ export function LibraryPage() {
   const { notify } = useToast()
   const { request, requestByMbid, pendingId } = useAlbumRequest()
   const player = usePlayer()
+  const [searchParams, setSearchParams] = useSearchParams()
 
-  const [mode, setMode] = useState<'albums' | 'tracks'>('albums')
-  const [text, setText] = useState('')
-  const [genre, setGenre] = useState('')
-  const [year, setYear] = useState('')
-  const [quality, setQuality] = useState('')
-  const [sort, setSort] = useState('recent')
+  const [mode, setMode] = useState<'albums' | 'tracks'>(
+    searchParams.get('tab') === 'tracks' ? 'tracks' : 'albums',
+  )
+  const [text, setText] = useState(() => searchParams.get('q') ?? '')
+  const [artist, setArtist] = useState(() => searchParams.get('artist') ?? '')
+  const [label, setLabel] = useState(() => searchParams.get('label') ?? '')
+  const [genre, setGenre] = useState(() => searchParams.get('genre') ?? '')
+  const [year, setYear] = useState(() => searchParams.get('year') ?? '')
+  const [quality, setQuality] = useState(() => searchParams.get('quality') ?? '')
+  const [sort, setSort] = useState(() => searchParams.get('sort') ?? 'recent')
   const search = useDebounced(text.trim(), 400)
+
+  useEffect(() => {
+    const next = new URLSearchParams()
+    if (search) next.set('q', search)
+    if (mode === 'tracks') next.set('tab', 'tracks')
+    if (mode === 'albums') {
+      if (artist) next.set('artist', artist)
+      if (label) next.set('label', label)
+      if (genre) next.set('genre', genre)
+      if (year) next.set('year', year)
+      if (quality) next.set('quality', quality)
+      if (sort && sort !== 'recent') next.set('sort', sort)
+    }
+    if (next.toString() !== searchParams.toString()) {
+      setSearchParams(next, { replace: true })
+    }
+  }, [search, mode, artist, label, genre, year, quality, sort, searchParams, setSearchParams])
 
   const stats = useQuery({
     queryKey: ['library', 'stats'],
@@ -63,15 +90,27 @@ export function LibraryPage() {
     queryFn: () => api<number[]>('/library/years'),
     staleTime: 5 * 60_000,
   })
+  const artists = useQuery({
+    queryKey: ['library', 'artists'],
+    queryFn: () => api<LibraryArtist[]>('/library/artists', { query: { limit: 1000 } }),
+    staleTime: 5 * 60_000,
+  })
+  const labels = useQuery({
+    queryKey: ['library', 'labels'],
+    queryFn: () => api<string[]>('/library/labels'),
+    staleTime: 5 * 60_000,
+  })
 
   const albums = useInfiniteQuery({
-    queryKey: ['library', 'albums', search, genre, year, quality, sort],
+    queryKey: ['library', 'albums', search, artist, label, genre, year, quality, sort],
     enabled: mode === 'albums',
     initialPageParam: 0,
     queryFn: ({ pageParam }) =>
       api<LibraryResponse>('/library/albums', {
         query: {
           q: search || undefined,
+          artist: artist || undefined,
+          label: label || undefined,
           genre: genre || undefined,
           year: year || undefined,
           quality: quality || undefined,
@@ -173,6 +212,30 @@ export function LibraryPage() {
         </div>
         {mode === 'albums' && (
           <>
+            <Select
+              value={artist}
+              onChange={(event) => setArtist(event.target.value)}
+              className="w-auto max-w-48"
+            >
+              <option value="">{t('library.allArtists')}</option>
+              {(artists.data ?? []).map((row) => (
+                <option key={row.name} value={row.name}>
+                  {row.name}
+                </option>
+              ))}
+            </Select>
+            <Select
+              value={label}
+              onChange={(event) => setLabel(event.target.value)}
+              className="w-auto max-w-48"
+            >
+              <option value="">{t('library.allLabels')}</option>
+              {(labels.data ?? []).map((value) => (
+                <option key={value} value={value}>
+                  {value}
+                </option>
+              ))}
+            </Select>
             <Select
               value={genre}
               onChange={(event) => setGenre(event.target.value)}
@@ -359,6 +422,11 @@ function LibraryTile({
           <span className="truncate">{album.album_artist}</span>
           {album.year && <span className="shrink-0 text-ink-500">· {album.year}</span>}
         </div>
+        {album.label && (
+          <div className="truncate text-[0.7rem] text-ink-500" title={album.label}>
+            {album.label}
+          </div>
+        )}
       </div>
     </div>
   )

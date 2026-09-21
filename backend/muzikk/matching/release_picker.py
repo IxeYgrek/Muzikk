@@ -73,7 +73,9 @@ def parse_release(payload: dict[str, Any]) -> ReleaseInfo:
     )
 
 
-def score_release(release: ReleaseInfo, *, group_first_date: str | None = None) -> float:
+def score_release(
+    release: ReleaseInfo, *, group_first_date: str | None = None, typical_tracks: int = 0
+) -> float:
     """Higher is better. Favours the plain original official edition."""
     score = 0.0
 
@@ -108,6 +110,10 @@ def score_release(release: ReleaseInfo, *, group_first_date: str | None = None) 
 
     if release.track_count <= 0:
         score -= 25
+    # A 1-track "file" edition of a 12-track album must not win: Soulseek then
+    # treats every lone FLAC as a complete match.
+    if typical_tracks >= 6 and 0 < release.track_count <= 2 and release.track_count * 3 < typical_tracks:
+        score -= 35
 
     if group_first_date and release.date:
         if release.date[:4] == group_first_date[:4]:
@@ -125,7 +131,10 @@ def pick_release(
 ) -> tuple[ReleaseInfo | None, list[ReleaseInfo]]:
     """Return the recommended release and every candidate, best first."""
     parsed = [parse_release(item) for item in releases or []]
+    typical_tracks = max((item.track_count for item in parsed if item.track_count >= 4), default=0)
     for release in parsed:
-        release.score = score_release(release, group_first_date=group_first_date)
+        release.score = score_release(
+            release, group_first_date=group_first_date, typical_tracks=typical_tracks
+        )
     parsed.sort(key=lambda item: (-item.score, item.date or "9999", item.title))
     return (parsed[0] if parsed else None), parsed

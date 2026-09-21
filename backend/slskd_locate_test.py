@@ -16,6 +16,7 @@ from muzikk.matching.scorer import score_candidate  # noqa: E402
 from muzikk.providers import slskd  # noqa: E402
 from muzikk.providers.base import AlbumQuery, DownloadHandle  # noqa: E402
 from muzikk.providers.slskd import SlskdProvider  # noqa: E402
+from muzikk.services.base import ServiceError  # noqa: E402
 from muzikk.services.settings import QualitySettings, SlskdSettings  # noqa: E402
 
 failures: list[str] = []
@@ -169,6 +170,10 @@ async def fake_request(method: str, path: str, **kwargs: object) -> object:
     if method == "POST" and path.endswith("/searches"):
         asked.append(dict(kwargs.get("json") or {}))
         return {}
+    if method == "DELETE":
+        return b""
+    if method == "GET" and path.endswith("/searches"):
+        return []
     if path.endswith("/responses"):
         return RESPONSES
     return {"state": "Completed"}
@@ -193,6 +198,37 @@ album_found = asyncio.run(probe.search(album_query))
 check("a lone track is still no album for an album search", album_found == [], album_found)
 check("slskd keeps its two file minimum for albums",
       asked and asked[0]["minimumResponseFileCount"] == 2, asked[:1])
+
+# A poll that fails must still DELETE the search it created, and leftover
+# searches slskd kept under another id are swept afterwards.
+calls: list[tuple[str, str]] = []
+
+
+async def failing_poll(method: str, path: str, **kwargs: object) -> object:
+    calls.append((method, path))
+    if method == "POST" and path.endswith("/searches"):
+        return {}
+    if method == "DELETE":
+        return b""
+    if method == "GET" and path.endswith("/searches"):
+        return [{"id": "leftover"}]
+    raise ServiceError("slskd", "poll failed", 500)
+
+
+broken = provider_for("/tmp")
+broken.http.request = failing_poll  # type: ignore[assignment]
+broken.settings.search_timeout_ms = 1
+asyncio.run(broken.search(single))
+check(
+    "a failed poll still deletes its search",
+    any(method == "DELETE" and "/searches/" in path and not path.endswith("/leftover") for method, path in calls),
+    calls,
+)
+check(
+    "leftover searches are purged",
+    any(method == "DELETE" and path.endswith("/leftover") for method, path in calls),
+    calls,
+)
 
 print()
 if failures:

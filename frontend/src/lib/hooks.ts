@@ -27,6 +27,16 @@ export function useLocalMode(): boolean {
   return useMode() === 'local'
 }
 
+/** MusicBrainz.org (or the optional browse_url) used for catalogue links. */
+export function useMusicBrainzBrowseUrl(): string {
+  const { data } = useQuery({
+    queryKey: ['health'],
+    queryFn: () => api<Health>('/health'),
+    staleTime: Number.POSITIVE_INFINITY,
+  })
+  return data?.musicbrainz_browse_url || 'https://musicbrainz.org'
+}
+
 /** Debounce any fast-changing value (search inputs mostly). */
 export function useDebounced<T>(value: T, delay = 350): T {
   const [debounced, setDebounced] = useState(value)

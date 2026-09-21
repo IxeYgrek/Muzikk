@@ -1,8 +1,8 @@
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { Activity, Clock, Disc3, Search, TriangleAlert } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 
 import { AlbumGrid, AlbumGridSkeleton } from '../components/AlbumCard'
 import { LocalImportCard } from '../components/LocalImport'
@@ -24,11 +24,21 @@ export function HomePage() {
   const { t } = useTranslation()
   const { user } = useAuth()
   const navigate = useNavigate()
-  const [text, setText] = useState('')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [text, setText] = useState(() => searchParams.get('q') ?? '')
   // The tab is either what to look for, or which kind of album to keep.
-  const [type, setType] = useState('')
+  const [type, setType] = useState(() => searchParams.get('type') ?? '')
   const query = useDebounced(text.trim(), 400)
   const { request, requestByMbid, pendingId } = useAlbumRequest()
+
+  useEffect(() => {
+    const next = new URLSearchParams()
+    if (query) next.set('q', query)
+    if (type) next.set('type', type)
+    if (next.toString() !== searchParams.toString()) {
+      setSearchParams(next, { replace: true })
+    }
+  }, [query, type, searchParams, setSearchParams])
   const searchingArtists = type === ARTIST_TAB
   const searchingTracks = type === TRACK_TAB
   const searchingLabels = type === LABEL_TAB

@@ -561,10 +561,9 @@ Then, for each provider, in the configured order:
    count. Up to four wordings are tried, each dropping something the peer
    may not have written: the release type first — Soulseek only answers when
    **every** word appears in the path, so searching "Pharaoh EP" never finds
-   a folder named "Eekoz - Pharaoh" — then edition mentions. The bare title,
-   without the artist, goes last: it is the only wording that returns
-   hundreds of unrelated folders, and asking it early used to fill the
-   candidate list before the wordings that name the artist had their turn.
+   a folder named "Eekoz - Pharaoh" — then edition mentions. The title is
+   never asked without its artist: that wording is what used to return
+   hundreds of unrelated folders.
 2. Score each candidate: artist and title similarity with `rapidfuzz`, after
    stripping accents, punctuation and mentions like "deluxe" or "remaster";
    track count match; track title coverage; detected format; consistency of

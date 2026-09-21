@@ -33,6 +33,7 @@ async def list_albums(
     user: CurrentUser,
     q: str | None = Query(default=None, max_length=200),
     artist: str | None = Query(default=None, max_length=300),
+    label: str | None = Query(default=None, max_length=200),
     genre: str | None = Query(default=None, max_length=100),
     year: int | None = Query(default=None, ge=1900, le=2100),
     quality: str | None = Query(default=None, pattern="^(lossless|lossy)$"),
@@ -48,6 +49,8 @@ async def list_albums(
         filters.append(or_(LibraryAlbum.name.ilike(pattern), LibraryAlbum.album_artist.ilike(pattern)))
     if artist:
         filters.append(LibraryAlbum.album_artist.ilike(f"%{artist.strip()}%"))
+    if label:
+        filters.append(LibraryAlbum.label.ilike(label.strip()))
     if year:
         filters.append(LibraryAlbum.year == year)
     if quality == "lossless":
@@ -181,6 +184,18 @@ async def list_genres(session: SessionDep, user: CurrentUser) -> list[str]:
             key = genre.strip()
             if key:
                 counter[key] = counter.get(key, 0) + 1
+    return [name for name, _ in sorted(counter.items(), key=lambda item: (-item[1], item[0]))][:80]
+
+
+@router.get("/labels")
+async def list_labels(session: SessionDep, user: CurrentUser) -> list[str]:
+    counter: dict[str, int] = {}
+    for label in session.execute(
+        select(LibraryAlbum.label).where(LibraryAlbum.label.is_not(None))
+    ).scalars():
+        key = (label or "").strip()
+        if key:
+            counter[key] = counter.get(key, 0) + 1
     return [name for name, _ in sorted(counter.items(), key=lambda item: (-item[1], item[0]))][:80]
 
 

@@ -127,6 +127,7 @@ export type LibraryAlbum = {
   is_lossless: boolean
   track_count: number
   genres: string[]
+  label: string | null
   release_group_mbid: string | null
   release_mbid: string | null
   image_tag: string | null
@@ -661,6 +662,50 @@ export type PlaylistTrack = PlayableTrack & {
   playlist_item_id: string
 }
 
+export type PlaylistBackupTrack = {
+  jellyfin_id: string
+  path: string
+  title: string
+  artist: string
+  album: string
+  recording_mbid: string | null
+  release_mbid: string | null
+}
+
+export type PlaylistBackupEntry = {
+  name: string
+  owner: string
+  tracks: PlaylistBackupTrack[]
+}
+
+export type PlaylistBackup = {
+  version: number
+  playlists: PlaylistBackupEntry[]
+}
+
+export type PlaylistImportMissing = {
+  title: string
+  artist: string
+  album: string
+  reason: string
+}
+
+export type PlaylistImportResult = {
+  name: string
+  playlist_id: string
+  added: number
+  missing: PlaylistImportMissing[]
+}
+
+export type PlaylistImportReport = {
+  playlists: PlaylistImportResult[]
+}
+
+export type PlaylistAccount = {
+  id: string
+  name: string
+}
+
 export type TrackSearchResponse = {
   count: number
   items: TrackSearchResult[]
@@ -672,6 +717,7 @@ export type Health = {
   setup_required: boolean
   mode: Mode
   services: Record<string, boolean>
+  musicbrainz_browse_url: string
 }
 
 export type SetupStatus = {

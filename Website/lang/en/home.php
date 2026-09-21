@@ -8,16 +8,16 @@ declare(strict_types=1);
 return [
     'hero' => [
         'eyebrow' => 'Self-hosted music request manager',
-        'lead' => 'Muzikk sits between your MusicBrainz catalogue and your Jellyfin library. '
+        'lead' => 'Muzikk sits between your MusicBrainz catalogue and your Jellyfin (or local) library. '
             . 'Ask for an album, and it finds it on Soulseek or BitTorrent, checks it, tags it, '
-            . 'files it under your own naming scheme and tells Jellyfin to look again.',
+            . 'files it under your own naming scheme and, when Jellyfin is in use, tells it to look again.',
         'ctaDocs' => 'Read the documentation',
         'ctaDownload' => 'Get Muzikk',
         'badges' => [
             'One container',
             'SQLite only',
             'Lossless first',
-            'Jellyfin accounts',
+            'Jellyfin or local',
         ],
         'credit' => 'This project (website and application) was entirely coded with Claude Opus',
     ],
@@ -29,14 +29,13 @@ return [
             'Your users search a real catalogue rather than a scraped index, see at a glance what the '
                 . 'library already holds, and request whole albums. Muzikk queries each source in the order '
                 . 'you chose, scores every candidate it gets back, and only downloads one it can defend.',
-            'What arrives is verified, tagged from MusicBrainz, given its artwork and filed where Jellyfin '
-                . 'expects it.',
+            'What arrives is verified, tagged from MusicBrainz, given its artwork and filed in your library.',
         ],
         'highlights' => [
             [
                 'icon' => 'headphones',
                 'title' => 'Complete musical toolkit',
-                'text' => 'Browse your library with Jellyfin, search for new music with MusicBrainz, '
+                'text' => 'Browse your Jellyfin or local library, search for new music with MusicBrainz, '
                     . 'and download using Soulseek and BitTorrent (with Prowlarr support).',
             ],
             [
@@ -85,19 +84,24 @@ return [
             [
                 'id' => 'jellyfin',
                 'icon' => 'disc',
-                'title' => 'Jellyfin library built in',
-                'lead' => 'Jellyfin provides the accounts and the library. Muzikk adds a player on top '
-                    . 'and never asks for a second password.',
+                'title' => 'Jellyfin or a local library',
+                'lead' => 'On first launch you choose once: Jellyfin owns the accounts and the library, '
+                    . 'or Muzikk handles both on its own. The choice cannot be undone.',
                 'items' => [
-                    'Sign in with your Jellyfin account. Administrators there are administrators here, '
-                        . 'and access can be limited to a chosen list of Jellyfin users.',
+                    '<strong>With Jellyfin</strong>, sign in with your Jellyfin account. Administrators '
+                        . 'there are administrators here, and access can be limited to a chosen list of '
+                        . 'Jellyfin users.',
+                    '<strong>Local only</strong>, create accounts in Muzikk itself. An administrator is '
+                        . 'set up in the wizard, then creates the others. The library is scanned from the '
+                        . 'folder you mount — no Jellyfin server required.',
                     '<strong>Playback directly inside the application</strong>, with a queue, shuffle and '
-                        . 'repeat. Click a track on an album page and it starts there.',
-                    'Files are read straight from the music folder when Muzikk can see it — faster, and '
-                        . 'independent of any Jellyfin playback policy. Otherwise the stream is relayed '
-                        . 'through the API and the browser never receives a Jellyfin token.',
-                    '<strong>Full Jellyfin playlist management</strong>: listen, create, delete, add a single '
-                        . 'track or a whole album in disc and track order, and remove a track.',
+                        . 'repeat. Click a track on an album page and it starts there. Files are read '
+                        . 'straight from the music folder; formats the browser cannot play are transcoded '
+                        . 'with ffmpeg. In Jellyfin mode the stream can also be relayed so the browser '
+                        . 'never receives a Jellyfin token.',
+                    '<strong>Jellyfin playlist management</strong> when that mode is chosen: listen, create, '
+                        . 'delete, add a single track or a whole album in disc and track order, and remove '
+                        . 'a track. Playlists are hidden in local mode.',
                     '<strong>Thirty second previews</strong> from Deezer, then iTunes, for a track you do not '
                         . 'own yet — relayed by the API, so the browser contacts neither service.',
                 ],
@@ -121,7 +125,8 @@ return [
                         . 'Muzikk moves on.',
                     'After download: integrity check with <code>flac -t</code> or <code>ffmpeg</code>, full '
                         . 'MusicBrainz tagging, embedded artwork and <code>cover.jpg</code>, filing under your '
-                        . 'naming template, a hardlink so seeding continues, then a Jellyfin rescan.',
+                        . 'naming template, a hardlink so seeding continues, then a Jellyfin rescan when '
+                        . 'that mode is in use.',
                     '<strong>Artist watchlist and wishlist</strong> list what is missing without ever '
                         . 'downloading it by themselves — new releases only, or a whole discography, per artist.',
                     '<strong>Local import</strong>: drop an album folder from the home page and Muzikk '
@@ -139,10 +144,12 @@ return [
                     [
                         'title' => 'Library analysis',
                         'items' => [
-                            'Walks the library folder straight from disk — including what Jellyfin skipped — '
-                                . 'groups files per album folder and folds multi-disc sets back together.',
+                            'Walks the library folder straight from disk — including what Jellyfin skipped, '
+                                . 'when Jellyfin is in use — groups files per album folder and folds multi-disc '
+                                . 'sets back together.',
                             'Flags seven anomalies: no MusicBrainz tag, uncertain match, no artwork, '
-                                . 'incomplete tags, doubled tags, duplicate album, missing from Jellyfin.',
+                                . 'incomplete tags, doubled tags, duplicate album, missing from Jellyfin '
+                                . '(Jellyfin mode).',
                             'Filter by anomaly, search by album, artist or path, and follow each album '
                                 . 'through three states: to fix, fixed, ignored.',
                         ],
@@ -172,7 +179,7 @@ return [
                         ],
                     ],
                     [
-                        'title' => 'Jellyfin reconciliation',
+                        'title' => 'Jellyfin reconciliation (Jellyfin mode)',
                         'items' => [
                             '<strong>Repair the Jellyfin covers</strong>: ask Jellyfin to look again, then '
                                 . 'upload the image directly for the albums still showing empty — from the '
@@ -189,14 +196,14 @@ return [
             [
                 'id' => 'administration',
                 'icon' => 'sliders',
-                'title' => 'Administration for Jellyfin admins',
+                'title' => 'Administration',
                 'lead' => 'Fifteen sections, saved one at a time. Each integration has a Test connection '
                     . 'button that uses what is on screen, even unsaved, and every secret is encrypted at rest.',
                 'groups' => [
                     [
                         'title' => 'General behaviour',
                         'items' => [
-                            'Default language and default weekly quota for accounts imported from Jellyfin.',
+                            'Default language and default weekly quota for new accounts.',
                             'Administrator approval required, and whether administrators bypass it.',
                             'Delay before a new attempt, and the maximum number of attempts per request.',
                             'Library index interval, followed artists check interval, log retention in days.',
@@ -252,7 +259,8 @@ return [
                         'title' => 'Player and providers',
                         'items' => [
                             'Playback on or off, reading files directly from the music folder, thirty '
-                                . 'second previews, a maximum relay bitrate, and play reporting to Jellyfin.',
+                                . 'second previews, a maximum relay bitrate, and play reporting to Jellyfin '
+                                . 'when that mode is in use.',
                             'Provider order: reorder Soulseek, public trackers and private trackers as a '
                                 . 'ranked list.',
                         ],
@@ -260,8 +268,9 @@ return [
                     [
                         'title' => 'Users and permissions',
                         'items' => [
-                            'Import accounts from Jellyfin in one click; administrator status always follows '
-                                . 'Jellyfin.',
+                            'In Jellyfin mode, import accounts in one click; administrator status always '
+                                . 'follows Jellyfin. In local mode, administrators create and rename accounts '
+                                . 'and reset passwords from this page.',
                             'Per account: <strong>account active</strong>, <strong>request albums</strong>, '
                                 . '<strong>upgrade to lossless</strong>, <strong>import a folder</strong>.',
                             '<strong>Automatic approval</strong> as a three-way choice — follow the global '
@@ -309,19 +318,19 @@ return [
             'search' => 'Search results, with an ownership badge and a play button on every release.',
             'album' => 'An album page: editions, tracklist, playback and the request button.',
             'requests' => 'Requests, with the full log of every candidate that was evaluated.',
-            'library' => 'The library, mirrored from Jellyfin.',
+            'library' => 'The library, from Jellyfin or scanned from disk.',
             'metadata' => 'The metadata workshop: anomalies found, identification, simulated write.',
             'admin' => 'Administration: fifteen sections, each with its own connection test.',
             'player' => 'The player, with its queue, shuffle and repeat.',
 			'upgrade' => 'Replace your mp3 in lossless equivalent.',
-			'playlist' => 'Manage your Jellyfin playlist.',
+			'playlist' => 'Manage your Jellyfin playlists (Jellyfin mode).',
         ],
     ],
 
     'cta' => [
         'title' => 'Ready to run it?',
-        'lead' => 'A compose file, three volumes and a Jellyfin API key. The documentation walks through '
-            . 'each service, the naming template and the usual mistakes.',
+        'lead' => 'A compose file, three volumes, and either a Jellyfin API key or a local administrator '
+            . 'account. The documentation walks through each service, the naming template and the usual mistakes.',
         'docs' => 'Read the documentation',
         'download' => 'Go to downloads',
     ],

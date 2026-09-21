@@ -269,6 +269,7 @@ class LibraryAlbum(Base):
     bit_depth: Mapped[int | None] = mapped_column(Integer, nullable=True)
     sample_rate: Mapped[int | None] = mapped_column(Integer, nullable=True)
     genres: Mapped[list[str]] = mapped_column(JSON, default=list)
+    label: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
     date_created: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     image_tag: Mapped[str | None] = mapped_column(String(64), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)

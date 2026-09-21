@@ -32,6 +32,7 @@ VORBIS_FIELDS = {
     "release_group_mbid": "musicbrainz_releasegroupid",
     "recording_mbid": "musicbrainz_trackid",
     "artist_mbid": "musicbrainz_artistid",
+    "label": "label",
 }
 
 ID3_FRAMES = {
@@ -66,6 +67,7 @@ MP4_FREEFORM = {
     "release_group_mbid": "----:com.apple.iTunes:MusicBrainz Release Group Id",
     "recording_mbid": "----:com.apple.iTunes:MusicBrainz Track Id",
     "artist_mbid": "----:com.apple.iTunes:MusicBrainz Artist Id",
+    "label": "----:com.apple.iTunes:LABEL",
 }
 
 # Windows Media, still found in older libraries.
@@ -82,6 +84,7 @@ ASF_FIELDS = {
     "release_group_mbid": "MusicBrainz/Release Group Id",
     "recording_mbid": "MusicBrainz/Track Id",
     "artist_mbid": "MusicBrainz/Artist Id",
+    "label": "WM/Publisher",
 }
 
 
@@ -104,6 +107,7 @@ class FileTags:
     release_group_mbid: str = ""
     recording_mbid: str = ""
     artist_mbid: str = ""
+    label: str = ""
     has_picture: bool = False
     duration: float | None = None
     bitrate: int | None = None
@@ -257,6 +261,10 @@ def _read_id3(tags, into: FileTags) -> None:
             setattr(into, attribute, _number(text))
         else:
             setattr(into, attribute, _text(text))
+
+    raw_label = tags.get("TPUB")
+    if raw_label is not None:
+        into.label = _text(getattr(raw_label, "text", raw_label))
 
     descriptions = {
         (frame.desc or "").lower(): _text(frame.text) for frame in tags.getall("TXXX")

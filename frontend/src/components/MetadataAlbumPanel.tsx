@@ -653,9 +653,18 @@ export function MetadataAlbumPanel({
                     type="button"
                     onClick={() => setExpanded(expanded === file.path ? null : file.path)}
                     className="flex w-full items-center gap-2 px-3 py-2 text-left"
+                    title={file.name}
                   >
-                    <span className="min-w-0 flex-1 truncate font-mono text-xs text-ink-300">
-                      {file.name}
+                    <span className="min-w-0 flex-1 truncate text-xs">
+                      <span className="text-ink-400">{tagText(file.before.title)}</span>
+                      <span className="mx-1.5 text-ink-600">→</span>
+                      <span
+                        className={
+                          file.changed.includes('title') ? 'text-emerald-200' : 'text-ink-300'
+                        }
+                      >
+                        {tagText(file.after.title)}
+                      </span>
                     </span>
                     {file.changed.length ? (
                       <Chip tone="brand">

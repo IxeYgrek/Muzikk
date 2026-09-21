@@ -72,10 +72,10 @@ class AlbumQuery:
         """Query strings to try, from the most to the least specific.
 
         Every variant drops something the peer may not have written: the kind of
-        release first, then the edition noise. The album on its own comes last
-        on purpose — it is the one term that brings back hundreds of unrelated
-        folders, and asking it early filled the candidate list before the terms
-        naming the artist ever got their turn.
+        release first, then the edition noise.         The album on its own is never asked when the artist is known: that
+        wording is what returns hundreds of unrelated folders. Various Artists
+        (or a nameless request) is the exception, because there is no artist
+        word to hold on to.
         """
         album = self.album.strip()
         artist = self.artist.strip()
@@ -98,8 +98,13 @@ class AlbumQuery:
             add(credited, simplified_album)
         if simplified_artist and simplified_album:
             add(simplified_artist, simplified_album)
-        add(album)
-        add(plain_album)
+        # A title without its artist is what fills Soulseek with hundreds of
+        # unrelated folders ("Cross Country" matching any path that happens
+        # to contain those two words). Keep it only when there is no artist
+        # to hold on to — Various Artists, or a nameless request.
+        if not credited:
+            add(album)
+            add(plain_album)
         return terms[:4]
 
 

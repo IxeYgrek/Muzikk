@@ -60,10 +60,11 @@ pharaoh = AlbumQuery(release_group_mbid="rg", album="Pharaoh Ep", artist="Eekoz"
 check("the release type is dropped from a term", "Eekoz Pharaoh" in pharaoh, pharaoh)
 check("the full title is still asked first", pharaoh[0] == "Eekoz Pharaoh Ep", pharaoh)
 check(
-    "the naked album comes after the terms naming the artist",
-    pharaoh.index("Pharaoh Ep") > pharaoh.index("Eekoz Pharaoh"),
+    "a known artist is kept on every term",
+    all("eekoz" in term.lower() for term in pharaoh),
     pharaoh,
 )
+check("the album is never asked without its artist", "Pharaoh Ep" not in pharaoh, pharaoh)
 
 bracketed = AlbumQuery(
     release_group_mbid="rg", album="Bang It (Single)", artist="Eekoz"
@@ -74,7 +75,12 @@ only_type = AlbumQuery(release_group_mbid="rg", album="EP", artist="Tycho").sear
 check("a record really called EP keeps its name", only_type[0] == "Tycho EP", only_type)
 
 plain = AlbumQuery(release_group_mbid="rg", album="Discovery", artist="Daft Punk").search_terms()
-check("a plain title asks twice, not four times", plain == ["Daft Punk Discovery", "Discovery"], plain)
+check("a plain title stays with its artist", plain == ["Daft Punk Discovery"], plain)
+
+various = AlbumQuery(
+    release_group_mbid="rg", album="Now 47", artist="Various Artists"
+).search_terms()
+check("various artists still ask the title alone", "Now 47" in various, various)
 
 # --------------------------------------------------------- release picking
 
@@ -107,6 +113,33 @@ releases = [
 best, ranked = pick_release(releases, group_first_date="2001-03-12")
 check("official edition wins", best is not None and best.mbid == "official", best.mbid if best else None)
 check("all editions ranked", len(ranked) == 3, len(ranked))
+
+single_file = {
+    "id": "file",
+    "title": "Discovery",
+    "status": "Official",
+    "date": "2001-03-12",
+    "country": "XW",
+    "media": [{"format": "Digital Media", "track-count": 1}],
+}
+best_album, ranked_album = pick_release(releases + [single_file], group_first_date="2001-03-12")
+check(
+    "a 1-track file edition of an album does not win",
+    best_album is not None and best_album.mbid != "file",
+    best_album.mbid if best_album else None,
+)
+true_single = [
+    {
+        "id": "single",
+        "title": "Bang It",
+        "status": "Official",
+        "date": "2015-01-28",
+        "country": "XW",
+        "media": [{"format": "Digital Media", "track-count": 1}],
+    }
+]
+best_single, _ = pick_release(true_single)
+check("a real single still wins", best_single is not None and best_single.mbid == "single")
 
 # -------------------------------------------------------------- scoring
 
@@ -252,6 +285,36 @@ check("faster soulseek peer is tried first", ranked_peers[0][0].username == "fas
 # shares are named after the album alone.
 result = score_candidate(impostor, pharaoh_query, QualitySettings(require_artist_match=False))
 check("the rule can be switched off", result.accepted, f"score={result.score} {result.reason}")
+
+bootleg = Candidate(
+    provider_key="slskd",
+    provider_label="Soulseek (slskd)",
+    kind="soulseek",
+    title="Dan Lampinski Early Years, Volume 14_Johnny Winter_1974-05-30_Cape Cod Coliseum",
+    directory="shared\\bootlegs\\Dan Lampinski Early Years, Volume 14_Johnny Winter_1974-05-30_Cape Cod Coliseum",
+    files=[CandidateFile(filename="01 concert.flac", size=209_400_000)],
+    files_inspected=True,
+    extra={"has_free_upload_slot": True},
+    upload_speed=2_000_000,
+    queue_length=0,
+)
+cross_country = AlbumQuery(
+    release_group_mbid="rg",
+    album="Cross Country",
+    artist="Pete & Bas",
+    track_count=1,
+    track_titles=["Cross Country"],
+)
+result = score_candidate(bootleg, cross_country, QualitySettings())
+check("an unrelated bootleg is refused", not result.accepted, f"{result.score} {result.reason}")
+result = score_candidate(
+    bootleg, cross_country, QualitySettings(require_artist_match=False)
+)
+check(
+    "even with the artist rule off",
+    not result.accepted,
+    f"{result.score} {result.reason} {result.details}",
+)
 
 tiny = candidate(
     "Daft Punk - Discovery [FLAC]",

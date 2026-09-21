@@ -50,6 +50,7 @@ export const SECTION_FIELDS: Record<string, FieldSpec[]> = {
     { key: 'url', type: 'text', placeholder: 'http://musicbrainz:5000', full: true },
     { key: 'use_public_fallback', type: 'bool', full: true },
     { key: 'public_url', type: 'text', full: true },
+    { key: 'browse_url', type: 'text', placeholder: 'https://musicbrainz.org', full: true },
     { key: 'rate_limit_per_second', type: 'number', step: 0.5, min: 0.1 },
     { key: 'public_rate_limit_per_second', type: 'number', step: 0.5, min: 0.1 },
     { key: 'contact', type: 'text', full: true },

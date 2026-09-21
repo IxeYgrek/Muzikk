@@ -37,6 +37,15 @@ TITLE_HIT_THRESHOLD = 76.0
 # release lands between 0.2 and 0.45. Without this an album of the right name by
 # the wrong artist passes the threshold, since the artist is only worth 20 points.
 MIN_ARTIST_SIMILARITY = 0.55
+
+# Album name or tracklist must look like the request. token_set of a two-word
+# title against a long unrelated path sits around 0.15; a real folder that
+# names the record is above 0.7. partial_ratio is not used: "Cross Country"
+# against a Johnny Winter bootleg scored 0.54 and "Live" against the same
+# path scored 0.75, which is how a 1-track edition then cleared 78 points.
+MIN_ALBUM_SIMILARITY = 0.55
+MIN_ALBUM_SIMILARITY_SINGLE = 0.72
+MIN_TITLE_COVERAGE = 0.4
 MB_PER_BYTE = 1 / (1024 * 1024)
 
 LOSSLESS_TOKENS = ("flac", "lossless", "alac", "ape", "wavpack", "wv", "aiff", "24bit", "24 bit", "hi-res")
@@ -68,9 +77,9 @@ def _album_similarity(candidate: Candidate, query: AlbumQuery) -> float:
     haystack = normalize_title(_haystack(candidate))
     if not haystack:
         return 0.0
-    direct = fuzz.token_set_ratio(target, haystack)
-    partial = fuzz.partial_ratio(target, haystack)
-    return max(direct, partial) / 100.0
+    return (
+        max(fuzz.token_set_ratio(target, haystack), fuzz.token_sort_ratio(target, haystack)) / 100.0
+    )
 
 
 def _artist_similarity(candidate: Candidate, query: AlbumQuery) -> float:
@@ -84,7 +93,9 @@ def _artist_similarity(candidate: Candidate, query: AlbumQuery) -> float:
         haystack = f"{haystack} {normalize_artist(parent_dir(candidate.directory))}"
     if not haystack.strip():
         return 0.0
-    return max(fuzz.token_set_ratio(target, haystack), fuzz.partial_ratio(target, haystack)) / 100.0
+    return (
+        max(fuzz.token_set_ratio(target, haystack), fuzz.token_sort_ratio(target, haystack)) / 100.0
+    )
 
 
 def _track_count_score(audio_count: int, query: AlbumQuery, tolerance: int) -> tuple[float, int]:
@@ -105,7 +116,10 @@ def _track_count_score(audio_count: int, query: AlbumQuery, tolerance: int) -> t
 def _track_title_coverage(candidate: Candidate, query: AlbumQuery) -> float:
     expected = [normalize_title(title) for title in query.track_titles if title]
     if not expected:
-        return 0.6
+        # Guessing 0.6 here used to hand 12 free points to a folder whose
+        # files were never compared. No titles means this axis contributes
+        # nothing; the album name has to carry the match instead.
+        return 0.0
     stems: list[str] = []
     for item in candidate.audio_files:
         name = Path(item.filename.replace("\\", "/")).name
@@ -241,8 +255,21 @@ def score_candidate(
         details["track_title_coverage"] = round(coverage * 100, 1)
     else:
         count_score = 0.6
-        coverage = 0.5
+        coverage = 0.0
         details["content_verified"] = False
+
+    min_album = (
+        MIN_ALBUM_SIMILARITY_SINGLE if query.track_count == 1 else MIN_ALBUM_SIMILARITY
+    )
+    if album_similarity < min_album and coverage < MIN_TITLE_COVERAGE:
+        return MatchResult(
+            reason=(
+                f"album and track titles do not match "
+                f"({details['album_similarity']}% album, "
+                f"{details.get('track_title_coverage', 0)}% titles)"
+            ),
+            details=details,
+        )
 
     score = (
         WEIGHT_ALBUM * album_similarity
@@ -258,6 +285,8 @@ def score_candidate(
             score += 4
             details["year_match"] = True
 
+    # Speed and seeders rank peers; they must not rescue a folder that barely
+    # named the record. Identity already cleared the gates above.
     if candidate.kind == "torrent" and candidate.seeders:
         score += min(6.0, candidate.seeders / 10.0)
     if candidate.kind == "soulseek":

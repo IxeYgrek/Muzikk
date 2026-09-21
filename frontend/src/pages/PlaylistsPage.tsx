@@ -1,25 +1,49 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import clsx from 'clsx'
-import { ListMusic, ListPlus, Play, Plus, Trash2, X } from 'lucide-react'
-import { useState } from 'react'
+import { Download, ListMusic, ListPlus, Play, Plus, Trash2, Upload, X } from 'lucide-react'
+import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { AlbumCover } from '../components/AlbumCard'
 import { useToast } from '../components/Toast'
-import { Button, Card, CenteredSpinner, EmptyState, Modal } from '../components/ui'
+import { Button, Card, CenteredSpinner, EmptyState, Modal, Select } from '../components/ui'
 import { ApiError, api } from '../lib/api'
+import { useAuth } from '../lib/auth'
 import { formatClock } from '../lib/format'
 import { usePlayer } from '../lib/player'
-import type { Playlist, PlaylistTrack } from '../lib/types'
+import type {
+  Playlist,
+  PlaylistAccount,
+  PlaylistBackup,
+  PlaylistImportReport,
+  PlaylistTrack,
+} from '../lib/types'
+
+function downloadJson(filename: string, payload: unknown) {
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  link.click()
+  URL.revokeObjectURL(url)
+}
 
 export function PlaylistsPage() {
   const { t } = useTranslation()
+  const { user } = useAuth()
   const { notify } = useToast()
   const queryClient = useQueryClient()
   const player = usePlayer()
+  const fileRef = useRef<HTMLInputElement>(null)
   const [openId, setOpenId] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
   const [name, setName] = useState('')
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [importing, setImporting] = useState(false)
+  const [targetUserId, setTargetUserId] = useState('')
+  const [pendingFile, setPendingFile] = useState<PlaylistBackup | null>(null)
+  const [report, setReport] = useState<PlaylistImportReport | null>(null)
 
   const playlists = useQuery({
     queryKey: ['playlists'],
@@ -30,6 +54,12 @@ export function PlaylistsPage() {
     queryKey: ['playlists', openId],
     queryFn: () => api<PlaylistTrack[]>(`/playlists/${openId}`),
     enabled: Boolean(openId),
+  })
+
+  const accounts = useQuery({
+    queryKey: ['playlists', 'accounts'],
+    queryFn: () => api<PlaylistAccount[]>('/playlists/accounts'),
+    enabled: Boolean(user?.is_admin && (importing || pendingFile)),
   })
 
   const fail = (error: unknown) =>
@@ -65,6 +95,66 @@ export function PlaylistsPage() {
     onError: fail,
   })
 
+  const toggle = (playlistId: string) => {
+    setSelected((current) => {
+      const next = new Set(current)
+      if (next.has(playlistId)) next.delete(playlistId)
+      else next.add(playlistId)
+      return next
+    })
+  }
+
+  const exportPlaylists = async () => {
+    try {
+      const ids = [...selected].join(',')
+      const payload = await api<PlaylistBackup>('/playlists/export', {
+        query: { ids: ids || undefined },
+      })
+      const stamp = new Date().toISOString().slice(0, 10)
+      downloadJson(`muzikk-playlists-${stamp}.json`, payload)
+    } catch (error) {
+      fail(error)
+    }
+  }
+
+  const readBackup = async (file: File) => {
+    try {
+      const parsed = JSON.parse(await file.text()) as PlaylistBackup
+      if (!parsed || !Array.isArray(parsed.playlists)) {
+        notify(t('errors.generic'), 'error')
+        return
+      }
+      setPendingFile(parsed)
+      setImporting(true)
+    } catch {
+      notify(t('errors.generic'), 'error')
+    }
+  }
+
+  const runImport = useMutation({
+    mutationFn: () =>
+      api<PlaylistImportReport>('/playlists/import', {
+        method: 'POST',
+        body: {
+          ...(pendingFile ?? { version: 1, playlists: [] }),
+          target_user_id: targetUserId || undefined,
+        },
+      }),
+    onSuccess: (result) => {
+      setImporting(false)
+      setPendingFile(null)
+      setTargetUserId('')
+      setReport(result)
+      refresh()
+      const playlistsCount = result.playlists.length
+      const tracksCount = result.playlists.reduce((sum, row) => sum + row.added, 0)
+      const missing = result.playlists.reduce((sum, row) => sum + row.missing.length, 0)
+      notify(t('playlists.imported', { playlists: playlistsCount, tracks: tracksCount }), 'success')
+      if (missing) notify(t('playlists.importedMissing', { count: missing }), 'error')
+    },
+    onError: fail,
+  })
+
   const rows = playlists.data ?? []
   const opened = rows.find((playlist) => playlist.id === openId)
 
@@ -75,10 +165,31 @@ export function PlaylistsPage() {
           <h1 className="font-display text-3xl font-bold text-ink-100">{t('playlists.title')}</h1>
           <p className="mt-1 text-sm text-ink-400">{t('playlists.subtitle')}</p>
         </div>
-        <Button size="sm" variant="primary" onClick={() => setCreating(true)}>
-          <Plus className="size-3.5" />
-          {t('playlists.create')}
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button size="sm" onClick={() => void exportPlaylists()} disabled={rows.length === 0}>
+            <Download className="size-3.5" />
+            {selected.size ? t('playlists.exportSelected') : t('playlists.exportAll')}
+          </Button>
+          <Button size="sm" onClick={() => fileRef.current?.click()}>
+            <Upload className="size-3.5" />
+            {t('playlists.import')}
+          </Button>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="application/json,.json"
+            className="hidden"
+            onChange={(event) => {
+              const file = event.target.files?.[0]
+              event.target.value = ''
+              if (file) void readBackup(file)
+            }}
+          />
+          <Button size="sm" variant="primary" onClick={() => setCreating(true)}>
+            <Plus className="size-3.5" />
+            {t('playlists.create')}
+          </Button>
+        </div>
       </header>
 
       {playlists.isLoading ? (
@@ -96,6 +207,14 @@ export function PlaylistsPage() {
               key={playlist.id}
               className="flex items-center gap-3 p-3 transition-colors hover:border-brand-500/30"
             >
+              <label className="shrink-0" title={t('playlists.select')}>
+                <input
+                  type="checkbox"
+                  checked={selected.has(playlist.id)}
+                  onChange={() => toggle(playlist.id)}
+                  className="size-4 accent-brand-500"
+                />
+              </label>
               <button type="button" onClick={() => setOpenId(playlist.id)} className="shrink-0">
                 <AlbumCover
                   url={playlist.cover_url}
@@ -161,6 +280,83 @@ export function PlaylistsPage() {
               {t('playlists.create')}
             </Button>
           </div>
+        </Modal>
+      )}
+
+      {importing && pendingFile && (
+        <Modal
+          open
+          onClose={() => {
+            setImporting(false)
+            setPendingFile(null)
+          }}
+          title={t('playlists.import')}
+        >
+          <div className="space-y-4">
+            <p className="text-sm text-ink-300">
+              {t('playlists.tracks', {
+                count: pendingFile.playlists.reduce((sum, row) => sum + row.tracks.length, 0),
+              })}
+              {' · '}
+              {pendingFile.playlists.length}
+            </p>
+            {user?.is_admin && (
+              <div>
+                <label className="label" htmlFor="playlist-target">
+                  {t('playlists.importTarget')}
+                </label>
+                <Select
+                  id="playlist-target"
+                  value={targetUserId}
+                  onChange={(event) => setTargetUserId(event.target.value)}
+                >
+                  <option value="">{t('playlists.importOwn')}</option>
+                  {(accounts.data ?? []).map((account) => (
+                    <option key={account.id} value={account.id}>
+                      {account.name}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+            )}
+            <Button
+              variant="primary"
+              loading={runImport.isPending}
+              onClick={() => runImport.mutate()}
+            >
+              {runImport.isPending ? t('playlists.importing') : t('playlists.import')}
+            </Button>
+          </div>
+        </Modal>
+      )}
+
+      {report && (
+        <Modal open onClose={() => setReport(null)} wide title={t('playlists.import')}>
+          <ul className="space-y-3">
+            {report.playlists.map((row, index) => (
+              <li key={`${row.playlist_id}-${index}`} className="text-sm">
+                <div className="font-medium text-ink-100">{row.name || t('playlists.title')}</div>
+                <div className="hint">
+                  {row.added
+                    ? t('playlists.tracks', { count: row.added })
+                    : t('playlists.importedNone')}
+                  {row.missing.length
+                    ? ` · ${t('playlists.importedMissing', { count: row.missing.length })}`
+                    : ''}
+                </div>
+                {row.missing.length > 0 && (
+                  <ul className="mt-1 space-y-0.5 text-xs text-accent-300">
+                    {row.missing.map((track, position) => (
+                      <li key={`${track.title}-${position}`}>
+                        {[track.artist, track.album, track.title].filter(Boolean).join(' · ') ||
+                          track.reason}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </li>
+            ))}
+          </ul>
         </Modal>
       )}
 

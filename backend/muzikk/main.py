@@ -112,12 +112,15 @@ async def health() -> HealthOut:
     if active_mode != mode_service.LOCAL:
         services["jellyfin"] = bool(jellyfin.url and jellyfin.api_key)
 
+    browse = (musicbrainz.browse_url or "").strip() or "https://musicbrainz.org"
+
     return HealthOut(
         status="ok",
         version=__version__,
         setup_required=not general.setup_completed,
         mode=active_mode,
         services=services,
+        musicbrainz_browse_url=browse.rstrip("/"),
     )
 
 

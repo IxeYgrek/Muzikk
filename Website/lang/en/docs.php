@@ -32,10 +32,13 @@ return [
                 ['type' => 'p', 'text' => 'Everything runs in a <strong>single container</strong>. FastAPI serves '
                     . 'both the API and the compiled React interface, and an internal asyncio worker drains a job '
                     . 'queue stored in SQLite. There is no Redis and no Postgres to provision.'],
-                ['type' => 'p', 'text' => 'Muzikk never holds a password of its own: authentication is delegated '
-                    . 'to Jellyfin, and the accounts are imported from it. Secrets you enter — API keys, the '
-                    . 'qBittorrent password — are encrypted at rest with a Fernet key generated in '
-                    . '<code>/config</code>, and are returned masked by the API.'],
+                ['type' => 'p', 'text' => 'On first launch you choose, once and for good, whether '
+                    . '<strong>Jellyfin</strong> owns the accounts and the music library, or whether '
+                    . '<strong>Muzikk</strong> handles both itself. In Jellyfin mode, authentication is '
+                    . 'delegated to it and accounts are imported from it. In local mode, passwords live in '
+                    . 'SQLite and the library is scanned from the folder you mount. Secrets you enter — '
+                    . 'API keys, the qBittorrent password — are encrypted at rest with a Fernet key generated '
+                    . 'in <code>/config</code>, and are returned masked by the API.'],
                 ['type' => 'note', 'text' => 'The interface listens on port <code>8383</code> by default, so '
                     . 'once the container is up it answers on <code>http://your-host:8383</code>.'],
             ],
@@ -45,7 +48,7 @@ return [
             'title' => 'Requirements',
             'blocks' => [
                 ['type' => 'table', 'head' => ['Service', 'Role', 'Required'], 'rows' => [
-                    ['Jellyfin', 'Authentication, user list, music library, rescan', 'Yes'],
+                    ['Jellyfin', 'Authentication, user list, music library, rescan — when that mode is chosen', 'Optional: skip it and run fully local'],
                     ['MusicBrainz', 'Catalogue: search, releases, tracklists', 'Recommended — the public server is used as a fallback'],
                     ['slskd', 'Soulseek downloading', 'At least one provider'],
                     ['Prowlarr + qBittorrent', 'Torrent search and downloading', 'At least one provider'],
@@ -80,14 +83,15 @@ CODE],
                 ['type' => 'h3', 'text' => 'Volumes'],
                 ['type' => 'table', 'head' => ['Volume', 'Contents'], 'rows' => [
                     ['<code>/config</code>', 'SQLite database, encryption key, JWT key, cover cache, logs'],
-                    ['<code>MUSIC_LIBRARY_CONTAINER</code> (<code>/music</code>)', 'The Jellyfin library, and where imports are filed'],
+                    ['<code>MUSIC_LIBRARY_CONTAINER</code> (<code>/music</code>)', 'The music library, and where imports are filed'],
                     ['<code>DOWNLOADS_CONTAINER</code> (<code>/downloads</code>)', 'The download root shared with slskd and qBittorrent'],
                 ]],
                 ['type' => 'p', 'text' => 'The <strong>host</strong> paths come from <code>MUSIC_LIBRARY</code> and '
                     . '<code>DOWNLOADS_ROOT</code>, the paths <strong>inside the container</strong> from '
                     . '<code>MUSIC_LIBRARY_CONTAINER</code> and <code>DOWNLOADS_CONTAINER</code>. Those last two '
                     . 'exist because the other containers do not necessarily see the disks in the same place: give '
-                    . 'Muzikk the path Jellyfin uses for the library, and the one slskd and qBittorrent use for '
+                    . 'Muzikk the path your library uses — the one Jellyfin uses, if Jellyfin is in the stack — '
+                    . 'and the one slskd and qBittorrent use for '
                     . 'downloads. Mounting the same host disk twice on two different paths is perfectly fine — '
                     . 'hardlinks keep working, since it is still one filesystem.'],
                 ['type' => 'h3', 'text' => 'The compose file'],
@@ -128,16 +132,20 @@ CODE],
             'id' => 'first-run',
             'title' => 'First start',
             'blocks' => [
-                ['type' => 'p', 'text' => 'Because Muzikk authenticates through Jellyfin, nobody can sign in until '
-                    . 'Jellyfin is configured. A setup wizard is therefore open on the very first launch, and '
-                    . 'closed for good afterwards.'],
+                ['type' => 'p', 'text' => 'A setup wizard is open on the very first launch, and closed for good '
+                    . 'afterwards. The first question cannot be revisited: how accounts and the library are managed.'],
                 ['type' => 'list', 'ordered' => true, 'items' => [
-                    '<strong>Jellyfin</strong> — the URL, for instance <code>http://jellyfin:8096</code>, and an '
-                        . 'API key created in Jellyfin under <em>Dashboard → Advanced → API keys</em>.',
-                    '<strong>Library</strong> — tick the music libraries to watch, and give the destination folder '
-                        . 'for imports, <code>/music</code> by default.',
-                    'Jellyfin users are imported. Sign in with a <strong>Jellyfin administrator</strong> account: '
-                        . 'it becomes a Muzikk administrator.',
+                    '<strong>Mode</strong> — <em>With Jellyfin</em>, or <em>Local only</em>. This choice is '
+                        . 'permanent for the installation.',
+                    '<strong>With Jellyfin</strong> — the URL, for instance <code>http://jellyfin:8096</code>, and an '
+                        . 'API key created in Jellyfin under <em>Dashboard → Advanced → API keys</em>. Tick the music '
+                        . 'libraries to watch, and give the destination folder for imports, <code>/music</code> by '
+                        . 'default. Jellyfin users are then imported. Sign in with a <strong>Jellyfin administrator</strong> '
+                        . 'account: it becomes a Muzikk administrator.',
+                    '<strong>Local only</strong> — create the first administrator (username and password), and give '
+                        . 'the library folder as the container sees it, typically the volume mounted on '
+                        . '<code>/music</code>. Sign in with that account afterwards. Playlists are not available in '
+                        . 'this mode, because they live on Jellyfin.',
                 ]],
                 ['type' => 'p', 'text' => 'Indexing the library starts in the background. Depending on its size, '
                     . 'expect a few minutes before the "already owned" badges show up.'],
@@ -153,13 +161,15 @@ CODE],
                     . 'field alone to keep its current value.'],
 
                 ['type' => 'h3', 'text' => 'Jellyfin'],
+                ['type' => 'p', 'text' => 'These settings apply when the installation runs <strong>with Jellyfin</strong>. '
+                    . 'They are unused in local mode.'],
                 ['type' => 'table', 'head' => ['Setting', 'Detail'], 'rows' => [
                     ['URL / API key', 'As in the wizard above'],
                     ['Watched libraries', 'Restricts indexing to the music libraries you pick'],
                     ['Trigger a scan after import', 'Calls <code>POST /Library/Refresh</code> once an album is filed'],
                     ['Allow every Jellyfin user', 'Turn it off and only the listed user ids may sign in'],
                 ]],
-                ['type' => 'p', 'text' => 'Jellyfin administrators — <code>Policy.IsAdministrator</code> — are '
+                ['type' => 'p', 'text' => 'In Jellyfin mode, Jellyfin administrators — <code>Policy.IsAdministrator</code> — are '
                     . 'Muzikk administrators, and that status is refreshed at each sign-in and each user sync.'],
 
                 ['type' => 'h3', 'text' => 'MusicBrainz'],
@@ -266,8 +276,8 @@ CODE],
                 ['type' => 'p', 'text' => 'This section drives the metadata workshop, which administrators reach '
                     . 'from the <em>Metadata</em> entry in the menu. The analysis walks the library folder, groups '
                     . 'files per album and reports seven anomalies: no MusicBrainz tag, a match that is only '
-                    . 'probable, missing artwork, incomplete tags, doubled tags, a duplicate, and a folder Jellyfin '
-                    . 'cannot see.'],
+                    . 'probable, missing artwork, incomplete tags, doubled tags, a duplicate, and — in Jellyfin '
+                    . 'mode — a folder Jellyfin cannot see.'],
                 ['type' => 'table', 'head' => ['Setting', 'Effect'], 'rows' => [
                     ['Nightly analysis and its hour', 'Re-runs the analysis every night at the given hour'],
                     ['Minimum files per album', 'Below it, a folder counts as loose tracks rather than an album'],
@@ -276,32 +286,35 @@ CODE],
                     ['AcoustID', 'Audio fingerprinting; needs a free API key'],
                 ]],
                 ['type' => 'p', 'text' => 'Nothing is written without confirmation: each album is simulated first, '
-                    . 'field by field, before and after. Once the tags are fixed, the <em>Reindex Jellyfin</em> '
-                    . 'button makes the server rediscover the folders it had ignored.'],
+                    . 'field by field, before and after. In Jellyfin mode, once the tags are fixed, the '
+                    . '<em>Reindex Jellyfin</em> button makes the server rediscover the folders it had ignored.'],
                 ['type' => 'p', 'text' => 'Audio fingerprinting relies on <code>fpcalc</code>, provided by the '
                     . 'image\'s <code>libchromaprint-tools</code> package. If your image was built before that '
                     . 'feature existed, rebuild it.'],
 
                 ['type' => 'h3', 'text' => 'Player'],
-                ['type' => 'p', 'text' => 'By default Muzikk reads the file straight from the library folder, '
-                    . 'resolving the path even when Jellyfin sees it under a different mount point. It is faster '
-                    . 'and depends on no Jellyfin playback policy. Untick <em>Read files from the music folder</em> '
-                    . 'if the library is only visible to Jellyfin: the stream is then relayed by the API, and the '
-                    . 'browser never receives a token. Exotic formats — APE, DSF, WavPack — always go through '
-                    . 'Jellyfin, which transcodes them.'],
+                ['type' => 'p', 'text' => 'By default Muzikk reads the file straight from the library folder. In '
+                    . 'Jellyfin mode it still resolves the path when Jellyfin sees the library under a different '
+                    . 'mount point. Direct reads are faster and depend on no Jellyfin playback policy. Untick '
+                    . '<em>Read files from the music folder</em> if the library is only visible to Jellyfin: the '
+                    . 'stream is then relayed by the API, and the browser never receives a token. Exotic formats '
+                    . '— APE, DSF, WavPack — are transcoded with ffmpeg in local mode, and through Jellyfin when '
+                    . 'that mode is chosen.'],
                 ['type' => 'p', 'text' => 'The maximum bitrate, in bits per second, applies to that relay; '
-                    . '<code>0</code> streams the original file. Plays can be reported to Jellyfin under the '
+                    . '<code>0</code> streams the original file. In Jellyfin mode, plays can be reported under the '
                     . 'listener\'s account, which assumes they have signed in to Muzikk since playback was enabled, '
                     . 'so that their token has been stored.'],
 
                 ['type' => 'h3', 'text' => 'Users and permissions'],
-                ['type' => 'p', 'text' => 'Accounts come from Jellyfin. For each one you grant, independently: '
+                ['type' => 'p', 'text' => 'In Jellyfin mode, accounts come from Jellyfin. In local mode, they are '
+                    . 'created in Muzikk by an administrator. For each one you grant, independently: '
                     . '<em>Account active</em>, <em>Request albums</em>, <em>Upgrade to lossless</em> and '
                     . '<em>Import a folder</em>. <em>Automatic approval</em> is a three-way choice — follow the '
                     . 'global setting, always, or never — and the weekly quota is a number, zero meaning '
                     . 'unlimited. Administrators bypass permissions and quotas.'],
-                ['type' => 'note', 'text' => 'Administrator status is not editable here on purpose: it is read from '
-                    . 'Jellyfin at every sign-in and every user sync, so it would be overwritten anyway.'],
+                ['type' => 'note', 'text' => 'In Jellyfin mode, administrator status is not editable here on purpose: '
+                    . 'it is read from Jellyfin at every sign-in and every user sync, so it would be overwritten '
+                    . 'anyway. In local mode, administrators are managed in Muzikk itself.'],
             ],
         ],
         [
@@ -333,7 +346,7 @@ CODE],
             'blocks' => [
                 ['type' => 'code', 'lang' => 'text', 'body' => <<<'CODE'
 request → (approval) → search → candidate chosen → download
-        → verification → tagging → import → Jellyfin rescan
+        → verification → tagging → import → library index (and Jellyfin rescan when in that mode)
 CODE],
                 ['type' => 'p', 'text' => 'Before searching anything, Muzikk inspects the slskd download folder: if '
                     . 'the album already sits there complete, it is imported directly, without going back to the '
@@ -347,8 +360,8 @@ CODE],
                         . 'wordings are tried, each dropping something the peer may not have written: the release '
                         . 'type first — Soulseek only answers when <strong>every</strong> word appears in the path, '
                         . 'so searching "Pharaoh EP" never finds a folder named "Eekoz - Pharaoh" — then edition '
-                        . 'mentions. The bare title, without the artist, goes last: it is the only wording that '
-                        . 'returns hundreds of unrelated folders.',
+                        . 'mentions. The title is never asked without its artist: that wording is what used to '
+                        . 'return hundreds of unrelated folders.',
                     'Score each candidate: artist and title similarity with <code>rapidfuzz</code>, after stripping '
                         . 'accents, punctuation and mentions like "deluxe" or "remaster"; track count match; track '
                         . 'title coverage; detected format; consistency of the size per track; seeders or peer speed.',
@@ -437,6 +450,7 @@ CODE],
 .venv/bin/python backend/artwork_test.py      # artwork resolution
 .venv/bin/python backend/metadata_test.py     # library analysis and tag reading
 .venv/bin/python backend/local_import_test.py # local folder import
+.venv/bin/python backend/local_mode_test.py   # local accounts, wizard and disk scanner
 .venv/bin/python backend/playback_test.py     # file lookup and Range requests
 .venv/bin/python frontend/check_frontend.py   # imports and translation keys
 CODE],
@@ -490,16 +504,20 @@ CODE],
                     [
                         'q' => 'Playback does not start',
                         'a' => 'The player shows the exact reason returned by the server next to "Cannot play". The '
-                            . '<em>Player</em> section must be enabled and, if direct access is off, Jellyfin has to '
-                            . 'be reachable from the container. An account that signed in before playback was enabled '
-                            . 'has no stored token yet, so the play falls back to the server API key and is not '
-                            . 'credited; signing out and back in is enough.',
+                            . '<em>Player</em> section must be enabled. In Jellyfin mode, if direct access is off, '
+                            . 'Jellyfin has to be reachable from the container. An account that signed in before '
+                            . 'playback was enabled has no stored token yet, so the play falls back to the server API '
+                            . 'key and is not credited; signing out and back in is enough. In local mode, files are '
+                            . 'read from the mounted library folder, with ffmpeg for formats the browser cannot play.',
                     ],
                     [
                         'q' => 'I cannot sign in',
-                        'a' => 'Muzikk stores no password, so the failure comes from Jellyfin. Check that the user is '
-                            . 'active in Muzikk under <em>Administration → Users</em>, and that the Jellyfin API key '
-                            . 'is still valid.',
+                        'a' => 'In Jellyfin mode, Muzikk stores no password, so the failure comes from Jellyfin. '
+                            . 'Check that the user is active in Muzikk under <em>Administration → Users</em>, and '
+                            . 'that the Jellyfin API key is still valid. In local mode, the password lives in Muzikk: '
+                            . 'an administrator can reset it from that same page. If login fails right after setup '
+                            . 'with an internal error, the first library scan may still be writing to SQLite — wait '
+                            . 'a moment and try again.',
                     ],
                 ]],
                 ['type' => 'p', 'text' => 'Detailed logs live in <code>/config/logs/muzikk.log</code> and in '

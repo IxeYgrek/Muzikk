@@ -206,6 +206,9 @@ async def sync_library(session: Session) -> dict[str, int]:
         row.formats = formats
         row.is_lossless = is_lossless
         row.genres = list(album.get("Genres") or [])
+        studios = album.get("Studios") or []
+        studio = studios[0].get("Name") if studios else ""
+        row.label = ((studio or "").strip()[:255] or None)
         row.date_created = _parse_date(album.get("DateCreated"))
         row.image_tag = (album.get("ImageTags") or {}).get("Primary")
 

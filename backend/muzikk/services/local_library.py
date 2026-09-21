@@ -100,6 +100,7 @@ class _Album:
     artist_mbid: str | None = None
     year: int | None = None
     genres: list[str] = field(default_factory=list)
+    label: str = ""
     formats: list[str] = field(default_factory=list)
     is_lossless: bool = False
     bit_depth: int | None = None
@@ -156,6 +157,7 @@ def _inspect(folder: metadata_service.FolderInfo, known: dict[str, tuple[int, fl
     group_mbids: list[str] = []
     artist_mbids: list[str] = []
     genres: list[str] = []
+    labels: list[str] = []
     depths: list[int | None] = []
     rates: list[int | None] = []
 
@@ -179,6 +181,7 @@ def _inspect(folder: metadata_service.FolderInfo, known: dict[str, tuple[int, fl
         group_mbids.append(read.release_group_mbid)
         artist_mbids.append(read.artist_mbid)
         genres.extend(read.genres or [])
+        labels.append(read.label)
         depths.append(read.bit_depth)
         rates.append(read.sample_rate)
 
@@ -206,6 +209,7 @@ def _inspect(folder: metadata_service.FolderInfo, known: dict[str, tuple[int, fl
         if cleaned and cleaned not in ordered:
             ordered.append(cleaned)
     album.genres = ordered[:MAX_GENRES]
+    album.label = metadata_service.common_value(labels)
 
     album.formats = sorted({extension_of(Path(entry.path).name) for entry in entries} - {""})
     album.is_lossless = bool(album.formats) and all(
@@ -245,6 +249,7 @@ def _write_album(session: Session, item_id: str, payload: _Album, existing: Libr
     row.bit_depth = payload.bit_depth
     row.sample_rate = payload.sample_rate
     row.genres = payload.genres
+    row.label = payload.label[:255] if payload.label else ""
     row.image_tag = None
     return row
 
@@ -385,6 +390,10 @@ async def scan_library(session: Session) -> dict[str, int]:
         seen.add(item_id)
         existing = albums.get(item_id)
         fingerprint = known.get(item_id, {}) if existing is not None else {}
+        # A first scan after the label column was added must re-read the tags,
+        # otherwise unchanged folders would stay without a publisher forever.
+        if existing is not None and existing.label is None:
+            fingerprint = {}
 
         try:
             payload = await asyncio.to_thread(_inspect, folder, fingerprint)

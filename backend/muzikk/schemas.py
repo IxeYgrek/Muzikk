@@ -187,6 +187,7 @@ class LibraryAlbumOut(ORMModel):
     is_lossless: bool
     track_count: int
     genres: list[str]
+    label: str | None = None
     release_group_mbid: str | None
     release_mbid: str | None
     image_tag: str | None
@@ -428,6 +429,8 @@ class HealthOut(BaseModel):
     # "jellyfin" or "local": the interface hides whole sections accordingly.
     mode: str = "jellyfin"
     services: dict[str, bool]
+    # Website used for "open on MusicBrainz" links. Distinct from the API URL.
+    musicbrainz_browse_url: str = "https://musicbrainz.org"
 
 
 # ------------------------------------------------------------------ metadata
@@ -705,6 +708,56 @@ class PlaylistChange(BaseModel):
     playlist_id: str
     name: str
     added: int = 0
+
+
+class PlaylistBackupTrack(BaseModel):
+    jellyfin_id: str = ""
+    path: str = ""
+    title: str = ""
+    artist: str = ""
+    album: str = ""
+    recording_mbid: str | None = None
+    release_mbid: str | None = None
+
+
+class PlaylistBackupEntry(BaseModel):
+    name: str
+    owner: str = ""
+    tracks: list[PlaylistBackupTrack] = Field(default_factory=list)
+
+
+class PlaylistBackup(BaseModel):
+    version: int = 1
+    playlists: list[PlaylistBackupEntry] = Field(default_factory=list)
+
+
+class PlaylistImportRequest(PlaylistBackup):
+    # Jellyfin user the playlists should belong to. Administrators only;
+    # everyone else always imports into their own account.
+    target_user_id: str | None = None
+
+
+class PlaylistImportMissing(BaseModel):
+    title: str = ""
+    artist: str = ""
+    album: str = ""
+    reason: str = ""
+
+
+class PlaylistImportResult(BaseModel):
+    name: str
+    playlist_id: str = ""
+    added: int = 0
+    missing: list[PlaylistImportMissing] = Field(default_factory=list)
+
+
+class PlaylistImportReport(BaseModel):
+    playlists: list[PlaylistImportResult] = Field(default_factory=list)
+
+
+class PlaylistAccount(BaseModel):
+    id: str
+    name: str
 
 
 # -------------------------------------------------------------- local import

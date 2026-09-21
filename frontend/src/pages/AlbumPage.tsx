@@ -19,6 +19,8 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
 import { AddToPlaylistModal, type PlaylistTarget } from '../components/AddToPlaylist'
 import { AlbumCover } from '../components/AlbumCard'
+import { MusicBrainzLinks } from '../components/MusicBrainzLinks'
+import { ReleasePicker } from '../components/ReleasePicker'
 import { StatusBadge } from '../components/StatusBadge'
 import { useToast } from '../components/Toast'
 import { Alert, Button, Card, CenteredSpinner, Chip, EmptyState, Spinner } from '../components/ui'
@@ -47,7 +49,6 @@ export function AlbumPage() {
   const { playPreview, previewLoading } = usePreview()
   const player = usePlayer()
   const localMode = useLocalMode()
-  const [showEditions, setShowEditions] = useState(false)
   const [playlistTarget, setPlaylistTarget] = useState<PlaylistTarget | null>(null)
 
   const albumQuery = useQuery({
@@ -286,6 +287,10 @@ export function AlbumPage() {
               <Info className="mt-0.5 size-3.5 shrink-0" />
               {t('album.albumOnly')}
             </p>
+            <MusicBrainzLinks
+              groupMbid={album.release_group_mbid}
+              releaseMbid={selected?.release_mbid}
+            />
           </div>
         </div>
 
@@ -325,59 +330,25 @@ export function AlbumPage() {
 
           {selected && (
             <Card className="p-4">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="grid flex-1 gap-x-8 gap-y-2 text-sm sm:grid-cols-2">
-                  <Detail label={t('album.edition')} value={selected.title} />
-                  <Detail label={t('album.released')} value={selected.date} />
-                  <Detail label={t('album.format')} value={selected.formats.join(', ')} />
-                  <Detail label={t('album.label')} value={selected.label} />
-                  <Detail label={t('album.country')} value={selected.country} />
-                  <Detail
-                    label={t('common.tracks')}
-                    value={selected.track_count ? String(selected.track_count) : null}
-                  />
-                </div>
-
-                {album.releases.length > 1 && (
-                  <Button size="sm" onClick={() => setShowEditions((value) => !value)}>
-                    {t('album.editions')} · {album.releases.length}
-                  </Button>
-                )}
+              <div className="grid flex-1 gap-x-8 gap-y-2 text-sm sm:grid-cols-2">
+                <Detail label={t('album.edition')} value={selected.title} />
+                <Detail label={t('album.released')} value={selected.date} />
+                <Detail label={t('album.format')} value={selected.formats.join(', ')} />
+                <Detail label={t('album.label')} value={selected.label} />
+                <Detail label={t('album.country')} value={selected.country} />
+                <Detail
+                  label={t('common.tracks')}
+                  value={selected.track_count ? String(selected.track_count) : null}
+                />
               </div>
 
-              {showEditions && (
-                <div className="mt-4 space-y-1.5 border-t border-ink-600/40 pt-4">
-                  <p className="hint mb-2">{t('album.chooseEdition')}</p>
-                  {album.releases.map((release) => {
-                    const active = release.release_mbid === selected.release_mbid
-                    return (
-                      <button
-                        key={release.release_mbid}
-                        type="button"
-                        onClick={() => {
-                          setSearchParams({ release: release.release_mbid })
-                          setShowEditions(false)
-                        }}
-                        className={clsx(
-                          'flex w-full flex-wrap items-center gap-x-3 gap-y-1 rounded-xl px-3 py-2 text-left text-sm transition-colors',
-                          active ? 'bg-brand-600/20 text-ink-100' : 'hover:bg-ink-700/40 text-ink-300',
-                        )}
-                      >
-                        <span className="min-w-0 flex-1 truncate font-medium">{release.title}</span>
-                        {release.date && <span className="text-xs text-ink-400">{release.date}</span>}
-                        {release.country && (
-                          <span className="text-xs text-ink-500">{release.country}</span>
-                        )}
-                        {release.formats.length > 0 && (
-                          <span className="text-xs text-ink-500">{release.formats.join('/')}</span>
-                        )}
-                        <span className="text-xs text-ink-500">
-                          {release.track_count} {t('common.tracks')}
-                        </span>
-                        {release.is_recommended && <Chip tone="brand">{t('album.recommended')}</Chip>}
-                      </button>
-                    )
-                  })}
+              {!owned && album.releases.length > 0 && (
+                <div className="mt-4 border-t border-ink-600/40 pt-4">
+                  <ReleasePicker
+                    releases={album.releases}
+                    selectedMbid={selected.release_mbid}
+                    onSelect={(mbid) => setSearchParams({ release: mbid })}
+                  />
                 </div>
               )}
             </Card>

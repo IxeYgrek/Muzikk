@@ -58,6 +58,9 @@ class MusicBrainzSettings(Section):
     url: str = "http://musicbrainz:5000"
     use_public_fallback: bool = True
     public_url: str = "https://musicbrainz.org"
+    # Website opened from the catalogue. Empty means musicbrainz.org, so a
+    # private API instance can still link to the public site.
+    browse_url: str = ""
     rate_limit_per_second: float = 10.0
     public_rate_limit_per_second: float = 1.0
     contact: str = "muzikk@localhost"

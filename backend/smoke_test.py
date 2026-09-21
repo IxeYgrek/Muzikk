@@ -83,8 +83,12 @@ with TestClient(app) as client:
         "/api/requests/{request_id}/upgrade/confirm",
         "/api/requests/{request_id}/upgrade/refuse",
         "/api/playlists",
+        "/api/playlists/export",
+        "/api/playlists/import",
+        "/api/playlists/accounts",
         "/api/playlists/{playlist_id}",
         "/api/playlists/{playlist_id}/items",
+        "/api/library/labels",
         "/api/watchlist/{watch_id}",
         "/api/watchlist/releases",
         "/api/watchlist/releases/{release_id}",
@@ -155,6 +159,28 @@ added = asyncio.run(
     _resolve_tracks(ShuffledAlbum(), PlaylistAdd(album_id="album-1", track_ids=["a"]))
 )
 check("album added disc then track", added == ["a", "b", "c"], added)
+
+from muzikk.api.playlists import track_matches_path, track_matches_tags  # noqa: E402
+
+item = {
+    "Name": "Digital Love",
+    "Album": "Discovery",
+    "AlbumArtist": "Daft Punk",
+    "Artists": ["Daft Punk"],
+    "Path": "/music/Daft Punk/Discovery (2001)/03 Digital Love.flac",
+}
+check(
+    "playlist path matches across mounts",
+    track_matches_path(item, "E:\\music\\Daft Punk\\Discovery (2001)\\03 Digital Love.flac"),
+)
+check(
+    "playlist tags match a renamed folder",
+    track_matches_tags(item, "Digital Love", "Daft Punk", "Discovery"),
+)
+check(
+    "playlist tags refuse a different title",
+    not track_matches_tags(item, "One More Time", "Daft Punk", "Discovery"),
+)
 
 # ------------------------------------------- what a follow puts on the list
 

@@ -9,7 +9,7 @@ return [
     'title' => 'Download',
     'eyebrow' => 'Get Muzikk',
     'lead' => 'Pull the image from Docker Hub, or clone the source and build it yourself. '
-        . 'One compose file, three volumes, and a Jellyfin API key.',
+        . 'One compose file, three volumes, and either a Jellyfin API key or a local administrator account.',
 
     'image' => [
         'soonBadge' => 'Coming soon',
@@ -34,7 +34,7 @@ return [
 
     'version' => [
         'label' => 'Current version',
-        'license' => 'Self-hosted, no telemetry, no account outside your own Jellyfin.',
+        'license' => 'Self-hosted, no telemetry, no account outside your own server.',
     ],
 
     'quickstart' => [
@@ -43,7 +43,7 @@ return [
         'steps' => [
             [
                 'title' => 'Create the shared network',
-                'text' => 'Muzikk reaches Jellyfin, slskd, Prowlarr and qBittorrent by container name, so '
+                'text' => 'Muzikk reaches Jellyfin (when you use it), slskd, Prowlarr and qBittorrent by container name, so '
                     . 'they all need to sit on one external network.',
                 'code' => 'docker network create mediastack',
             ],
@@ -66,9 +66,10 @@ CODE,
             ],
             [
                 'title' => 'Finish in the browser',
-                'text' => 'Open <code>http://your-host:8383</code>, give the setup wizard your Jellyfin URL '
-                    . 'and API key, pick the music libraries, then sign in with a Jellyfin administrator '
-                    . 'account.',
+                'text' => 'Open <code>http://your-host:8383</code>. The wizard asks whether Jellyfin or '
+                    . 'Muzikk itself should own the accounts and the library. With Jellyfin, give the URL '
+                    . 'and API key, pick the music libraries, then sign in with a Jellyfin administrator. '
+                    . 'Locally, create the first administrator and point at the mounted music folder.',
                 'code' => null,
             ],
         ],
@@ -76,12 +77,13 @@ CODE,
 
     'requirements' => [
         'title' => 'What you need around it',
-        'lead' => 'Jellyfin is required. Beyond that, one download provider is enough to get going.',
+        'lead' => 'Jellyfin is optional: skip it and Muzikk keeps the accounts and the library itself. '
+            . 'Beyond that, one download provider is enough to get going.',
         'items' => [
             [
                 'icon' => 'shield',
                 'name' => 'Jellyfin',
-                'text' => 'Accounts, permissions, the music library and the rescan. Required.',
+                'text' => 'Accounts, permissions, the music library and the rescan — when you choose that mode.',
                 'url' => 'https://jellyfin.org',
             ],
             [

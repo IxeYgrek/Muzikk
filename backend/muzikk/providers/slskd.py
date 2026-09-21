@@ -19,6 +19,9 @@ logger = logging.getLogger(__name__)
 
 SEARCH_POLL_INTERVAL = 1.5
 TERMINAL_SEARCH_STATES = ("Completed", "Cancelled", "Errored", "TimedOut")
+# One Soulseek wording can return hundreds of folders. Scoring them all is
+# how a 1-track request accepted a bootleg that merely shared two common words.
+MAX_SEARCH_CANDIDATES = 80
 
 # The 5s wait slskd gives up on is a round trip to the Soulseek server asking
 # for the peer address, and that server is regularly slower than that. Waiting
@@ -94,22 +97,23 @@ class SlskdProvider(Provider):
             "maximumPeerQueueLength": self.settings.max_peer_queue_length,
             "minimumResponseFileCount": minimum_files,
         }
-        await self.http.request("POST", self._api("/searches"), json=payload)
-
-        deadline = self.settings.search_timeout_ms / 1000 + 20
-        waited = 0.0
-        while waited < deadline:
-            await asyncio.sleep(SEARCH_POLL_INTERVAL)
-            waited += SEARCH_POLL_INTERVAL
-            state = await self.http.request("GET", self._api(f"/searches/{search_id}"))
-            current = (state or {}).get("state") or ""
-            if any(marker in current for marker in TERMINAL_SEARCH_STATES):
-                break
-
         try:
+            await self.http.request("POST", self._api("/searches"), json=payload)
+
+            deadline = self.settings.search_timeout_ms / 1000 + 20
+            waited = 0.0
+            while waited < deadline:
+                await asyncio.sleep(SEARCH_POLL_INTERVAL)
+                waited += SEARCH_POLL_INTERVAL
+                state = await self.http.request("GET", self._api(f"/searches/{search_id}"))
+                current = (state or {}).get("state") or ""
+                if any(marker in current for marker in TERMINAL_SEARCH_STATES):
+                    break
+
             responses = await self.http.request(
                 "GET", self._api(f"/searches/{search_id}/responses")
             )
+            return responses or []
         finally:
             try:
                 await self.http.request(
@@ -117,7 +121,33 @@ class SlskdProvider(Provider):
                 )
             except ServiceError:
                 pass
-        return responses or []
+
+    async def purge_searches(self) -> None:
+        """Drop leftover slskd searches, including ones whose id we never saw.
+
+        A poll that fails, or a search slskd registered under another id, would
+        otherwise sit in its list until someone cleaned it by hand.
+        """
+        try:
+            searches = await self.http.request("GET", self._api("/searches"))
+        except ServiceError:
+            return
+        if isinstance(searches, dict):
+            searches = searches.get("searches") or searches.get("items") or []
+        if not isinstance(searches, list):
+            return
+        for item in searches:
+            if not isinstance(item, dict):
+                continue
+            search_id = item.get("id")
+            if not search_id:
+                continue
+            try:
+                await self.http.request(
+                    "DELETE", self._api(f"/searches/{search_id}"), expect_json=False
+                )
+            except ServiceError:
+                continue
 
     async def search(self, query: AlbumQuery) -> list[Candidate]:
         if not self.enabled:
@@ -127,65 +157,70 @@ class SlskdProvider(Provider):
         candidates: list[Candidate] = []
         minimum_files = _minimum_files(query)
 
-        for term in query.search_terms():
-            try:
-                responses = await self._run_search(term, minimum_files)
-            except ServiceError as exc:
-                logger.warning("slskd search failed for %r: %s", term, exc.message)
-                continue
-
-            for response in responses:
-                username = response.get("username")
-                if not username:
+        try:
+            for term in query.search_terms():
+                try:
+                    responses = await self._run_search(term, minimum_files)
+                except ServiceError as exc:
+                    logger.warning("slskd search failed for %r: %s", term, exc.message)
                     continue
-                grouped: dict[str, list[dict[str, Any]]] = {}
-                for entry in response.get("files") or []:
-                    filename = entry.get("filename") or ""
-                    if not filename:
-                        continue
-                    grouped.setdefault(_remote_dir(filename), []).append(entry)
 
-                for directory, entries in grouped.items():
-                    marker = (username, directory)
-                    if marker in seen_directories:
+                for response in responses:
+                    username = response.get("username")
+                    if not username:
                         continue
-                    audio = [item for item in entries if is_audio_file(item.get("filename") or "")]
-                    if len(audio) < minimum_files:
-                        continue
-                    seen_directories.add(marker)
-                    files = [
-                        CandidateFile(
-                            filename=item.get("filename") or "",
-                            size=int(item.get("size") or 0),
-                            length_seconds=item.get("length"),
-                            bitrate=item.get("bitRate"),
-                            bit_depth=item.get("bitDepth"),
-                            sample_rate=item.get("sampleRate"),
-                        )
-                        for item in entries
-                    ]
-                    candidates.append(
-                        Candidate(
-                            provider_key=self.key,
-                            provider_label=self.label,
-                            kind=self.kind,
-                            title=basename(directory) or directory,
-                            directory=directory,
-                            username=username,
-                            size=sum(item.size for item in files),
-                            files=files,
-                            files_inspected=True,
-                            upload_speed=response.get("uploadSpeed"),
-                            queue_length=response.get("queueLength"),
-                            extra={
-                                "has_free_upload_slot": response.get("hasFreeUploadSlot"),
-                                "search_term": term,
-                            },
-                        )
-                    )
+                    grouped: dict[str, list[dict[str, Any]]] = {}
+                    for entry in response.get("files") or []:
+                        filename = entry.get("filename") or ""
+                        if not filename:
+                            continue
+                        grouped.setdefault(_remote_dir(filename), []).append(entry)
 
-            if len(candidates) >= 40:
-                break
+                    for directory, entries in grouped.items():
+                        marker = (username, directory)
+                        if marker in seen_directories:
+                            continue
+                        audio = [item for item in entries if is_audio_file(item.get("filename") or "")]
+                        if len(audio) < minimum_files:
+                            continue
+                        seen_directories.add(marker)
+                        files = [
+                            CandidateFile(
+                                filename=item.get("filename") or "",
+                                size=int(item.get("size") or 0),
+                                length_seconds=item.get("length"),
+                                bitrate=item.get("bitRate"),
+                                bit_depth=item.get("bitDepth"),
+                                sample_rate=item.get("sampleRate"),
+                            )
+                            for item in entries
+                        ]
+                        candidates.append(
+                            Candidate(
+                                provider_key=self.key,
+                                provider_label=self.label,
+                                kind=self.kind,
+                                title=basename(directory) or directory,
+                                directory=directory,
+                                username=username,
+                                size=sum(item.size for item in files),
+                                files=files,
+                                files_inspected=True,
+                                upload_speed=response.get("uploadSpeed"),
+                                queue_length=response.get("queueLength"),
+                                extra={
+                                    "has_free_upload_slot": response.get("hasFreeUploadSlot"),
+                                    "search_term": term,
+                                },
+                            )
+                        )
+                        if len(candidates) >= MAX_SEARCH_CANDIDATES:
+                            return candidates
+
+                if len(candidates) >= MAX_SEARCH_CANDIDATES:
+                    break
+        finally:
+            await self.purge_searches()
 
         return candidates
 

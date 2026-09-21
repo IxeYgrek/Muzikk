@@ -9,12 +9,13 @@ import {
   Play,
   RotateCcw,
   ScanSearch,
+  ScrollText,
   Trash2,
   X,
 } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 
 import { AlbumCover } from '../components/AlbumCard'
 import { ACTIVE_STATUSES, INDETERMINATE_STATUSES, StatusBadge } from '../components/StatusBadge'
@@ -286,50 +287,83 @@ function RequestRow({
   const { t } = useTranslation()
   const active = ACTIVE_STATUSES.has(request.status)
   const waiting = INDETERMINATE_STATUSES.has(request.status)
+  const albumHref =
+    request.status === 'imported' && request.release_group_mbid
+      ? `/albums/${request.release_group_mbid}`
+      : null
 
   return (
     <Card className="flex flex-wrap items-center gap-3 p-3 transition-colors hover:border-brand-500/30">
-      <button type="button" onClick={onOpen} className="shrink-0">
-        <AlbumCover
-          url={request.cover_url}
-          alt={request.album_title}
-          size={250}
-          className="size-14 rounded-lg"
-        />
-      </button>
+      {albumHref ? (
+        <Link to={albumHref} className="shrink-0">
+          <AlbumCover
+            url={request.cover_url}
+            alt={request.album_title}
+            size={250}
+            className="size-14 rounded-lg"
+          />
+        </Link>
+      ) : (
+        <button type="button" onClick={onOpen} className="shrink-0">
+          <AlbumCover
+            url={request.cover_url}
+            alt={request.album_title}
+            size={250}
+            className="size-14 rounded-lg"
+          />
+        </button>
+      )}
 
-      <button type="button" onClick={onOpen} className="min-w-40 flex-1 text-left">
-        <div className="flex items-center gap-2">
-          <span className="truncate font-semibold text-ink-100">{request.album_title}</span>
-          {request.is_upgrade && (
-            <Chip tone="warning">
-              <ArrowUpCircle className="size-3" />
-              {t('requests.upgrade')}
-            </Chip>
-          )}
-        </div>
-        <div className="truncate text-sm text-ink-400">
-          {request.artist_name}
-          {request.year ? ` · ${request.year}` : ''}
-        </div>
-        {active && (
-          <div className="mt-1.5 flex items-center gap-2">
-            <ProgressBar
-              value={request.progress}
-              className="max-w-52"
-              indeterminate={waiting}
-            />
-            <span className="text-xs tabular-nums text-ink-400">
-              {waiting
-                ? t(`status.${request.status}`, request.status)
-                : `${Math.round(request.progress)} %`}
-            </span>
+      {albumHref ? (
+        <Link to={albumHref} className="min-w-40 flex-1 text-left">
+          <div className="flex items-center gap-2">
+            <span className="truncate font-semibold text-ink-100">{request.album_title}</span>
+            {request.is_upgrade && (
+              <Chip tone="warning">
+                <ArrowUpCircle className="size-3" />
+                {t('requests.upgrade')}
+              </Chip>
+            )}
           </div>
-        )}
-        {request.error && request.status === 'failed' && (
-          <div className="mt-1 truncate text-xs text-accent-300">{request.error}</div>
-        )}
-      </button>
+          <div className="truncate text-sm text-ink-400">
+            {request.artist_name}
+            {request.year ? ` · ${request.year}` : ''}
+          </div>
+        </Link>
+      ) : (
+        <button type="button" onClick={onOpen} className="min-w-40 flex-1 text-left">
+          <div className="flex items-center gap-2">
+            <span className="truncate font-semibold text-ink-100">{request.album_title}</span>
+            {request.is_upgrade && (
+              <Chip tone="warning">
+                <ArrowUpCircle className="size-3" />
+                {t('requests.upgrade')}
+              </Chip>
+            )}
+          </div>
+          <div className="truncate text-sm text-ink-400">
+            {request.artist_name}
+            {request.year ? ` · ${request.year}` : ''}
+          </div>
+          {active && (
+            <div className="mt-1.5 flex items-center gap-2">
+              <ProgressBar
+                value={request.progress}
+                className="max-w-52"
+                indeterminate={waiting}
+              />
+              <span className="text-xs tabular-nums text-ink-400">
+                {waiting
+                  ? t(`status.${request.status}`, request.status)
+                  : `${Math.round(request.progress)} %`}
+              </span>
+            </div>
+          )}
+          {request.error && request.status === 'failed' && (
+            <div className="mt-1 truncate text-xs text-accent-300">{request.error}</div>
+          )}
+        </button>
+      )}
 
       <div className="flex shrink-0 flex-col items-end gap-1">
         <StatusBadge status={request.status} />
@@ -340,6 +374,11 @@ function RequestRow({
       </div>
 
       <div className="flex shrink-0 items-center gap-1">
+        {albumHref && (
+          <Button size="sm" variant="ghost" onClick={onOpen} title={t('requests.openLog')}>
+            <ScrollText className="size-3.5" />
+          </Button>
+        )}
         {isAdmin && request.status === 'pending' && (
           <>
             <Button
