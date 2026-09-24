@@ -226,7 +226,7 @@ export function AlbumPage() {
                     className="w-full"
                     onClick={() =>
                       setPlaylistTarget({
-                        label: `${album.artist_name} — ${album.title}`,
+                        label: `${album.artist} — ${album.title}`,
                         albumId: album.ownership.jellyfin_id ?? undefined,
                       })
                     }

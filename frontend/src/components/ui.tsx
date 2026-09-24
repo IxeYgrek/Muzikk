@@ -120,11 +120,8 @@ export function Toggle({
 
 /* ------------------------------------------------------------------- cards */
 
-export function Card({
-  className,
-  children,
-  ...rest
-}: ComponentProps<'div'> & { children: ReactNode }) {
+// Children stay optional: an empty card is how a loading skeleton is drawn.
+export function Card({ className, children, ...rest }: ComponentProps<'div'>) {
   return (
     <div className={clsx('glass rounded-2xl', className)} {...rest}>
       {children}
