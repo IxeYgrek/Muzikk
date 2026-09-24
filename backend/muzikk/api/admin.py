@@ -459,6 +459,7 @@ async def run_job(kind: str, session: SessionDep, admin: AdminUser) -> dict[str,
         queue.WISHLIST_RETRY,
         queue.RETRY_FAILED,
         queue.PRUNE_EVENTS,
+        queue.RECOMMENDATIONS,
     }
     if mode_service.is_local(session):
         allowed.discard(queue.USERS_SYNC)

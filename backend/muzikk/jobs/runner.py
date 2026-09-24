@@ -13,7 +13,7 @@ from sqlalchemy import func, select
 
 from ..config import get_env_config
 from ..db import session_scope
-from ..models import Download, MetadataAlbum, Request, RequestStatus, utcnow
+from ..models import Download, MetadataAlbum, Request, RequestStatus, User, utcnow
 from ..pipeline.orchestrator import orchestrator
 from ..services import coverfiles as coverfiles_service
 from ..services import indexers as indexers_service
@@ -22,6 +22,7 @@ from ..services import jellyfinmeta as jellyfinmeta_service
 from ..services import library_sync as library_sync_service
 from ..services import metadata as metadata_service
 from ..services import mode as mode_service
+from ..services import recommend as recommend_service
 from ..services import settings as settings_service
 from ..services import users as users_service
 from ..services import watchlist as watchlist_service
@@ -62,6 +63,24 @@ async def _indexers_sync(_: dict[str, Any]) -> None:
     with session_scope() as session:
         result = await indexers_service.sync_indexers(session)
     logger.info("Indexer sync finished: %s", result)
+
+
+async def _recommendations(payload: dict[str, Any]) -> None:
+    """Rebuild suggestions, for one listener or for all of them.
+
+    A single listener is asked for when somebody pressed refresh on their own
+    page; the scheduler asks for everyone.
+    """
+    user_id = int(payload.get("user_id") or 0)
+    with session_scope() as session:
+        if user_id:
+            user = session.get(User, user_id)
+            if user is None:
+                return
+            result: dict[str, Any] = await recommend_service.refresh_for(session, user)
+        else:
+            result = await recommend_service.refresh_all(session)
+    logger.info("Recommendations finished: %s", result)
 
 
 async def _watchlist_check(_: dict[str, Any]) -> None:
@@ -151,6 +170,7 @@ HANDLERS: dict[str, Callable[[dict[str, Any]], Awaitable[None]]] = {
     queue.ARTWORK_SYNC: _artwork_sync,
     queue.JELLYFIN_COVERS: _jellyfin_covers,
     queue.JELLYFIN_METADATA: _jellyfin_metadata,
+    queue.RECOMMENDATIONS: _recommendations,
 }
 
 
@@ -335,6 +355,12 @@ class Worker:
                     if self._due("watchlist", max(1, general.watchlist_check_interval_hours) * 3600):
                         queue.enqueue(session, queue.WATCHLIST_CHECK)
                         queue.enqueue(session, queue.WISHLIST_RETRY)
+
+                    # A taste moves slowly, and the services rebuild their own
+                    # figures daily at best, so there is nothing to gain from
+                    # asking more often than this.
+                    if general.setup_completed and self._due("recommendations", 12 * 3600):
+                        queue.enqueue(session, queue.RECOMMENDATIONS)
 
                     if self._due("retry", 15 * 60):
                         queue.enqueue(session, queue.RETRY_FAILED)

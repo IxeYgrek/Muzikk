@@ -15,10 +15,23 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import select
 
+from ..jobs import queue
 from ..matching.normalize import fuzzy_key
-from ..models import LibraryArtist
-from ..schemas import AlbumCard, RecommendationResponse, SearchResponse
-from ..services import catalog, clients, recommend
+from ..models import (
+    LibraryArtist,
+    Recommendation,
+    RecommendationKind,
+    RecommendationRun,
+    RecommendationSection,
+)
+from ..schemas import (
+    AlbumCard,
+    RecommendationResponse,
+    SearchResponse,
+    SuggestedAlbum,
+    SuggestedArtist,
+)
+from ..services import catalog, clients
 from ..services import settings as settings_service
 from ..services.base import ServiceError
 from ..services.lastfm import LastfmClient
@@ -224,13 +237,70 @@ async def missing_from_library(
 
 @router.get("/for-you", response_model=RecommendationResponse)
 async def for_you(session: SessionDep, user: CurrentUser) -> RecommendationResponse:
-    """Albums and artists suggested from what this listener actually listens to.
+    """Everything computed for this listener, read straight from the table.
 
-    The answer names its own sources so the interface can say where the
-    suggestions came from, and can explain itself when nothing is connected yet
-    instead of showing an empty grid.
+    Nothing is computed here: a run takes dozens of calls across two services
+    and MusicBrainz. The page says when it last ran and offers to run it again.
     """
-    items, artists, sources, seeds = await recommend.recommendations_for(session, user)
-    return RecommendationResponse(
-        items=items, artists=artists, sources=sources, seeds=seeds[:12]
+    rows = (
+        session.execute(
+            select(Recommendation)
+            .where(Recommendation.user_id == user.id, Recommendation.ignored.is_(False))
+            .order_by(Recommendation.score.desc(), Recommendation.id.asc())
+        )
+        .scalars()
+        .all()
     )
+    run = session.get(RecommendationRun, user.id)
+
+    def albums(section: str) -> list[SuggestedAlbum]:
+        return [
+            SuggestedAlbum(
+                **row.payload, id=row.id, seed_name=row.seed_name, sources=row.sources or []
+            )
+            for row in rows
+            if row.section == section and row.kind == RecommendationKind.ALBUM
+        ]
+
+    listenbrainz = settings_service.load(session, "listenbrainz")
+    lastfm = settings_service.load(session, "lastfm")
+    return RecommendationResponse(
+        artists=[
+            SuggestedArtist(
+                **row.payload, id=row.id, seed_name=row.seed_name, sources=row.sources or []
+            )
+            for row in rows
+            if row.kind == RecommendationKind.ARTIST
+        ],
+        items=albums(RecommendationSection.DISCOVER),
+        rediscover=albums(RecommendationSection.REDISCOVER),
+        fresh=albums(RecommendationSection.FRESH),
+        sources=list(run.sources or []) if run else [],
+        computed_at=run.finished_at if run else None,
+        running=bool(run and run.finished_at is None),
+        # Whether connecting an account would change anything at all.
+        connected=bool(user.listenbrainz_user or user.lastfm_user),
+        available=bool(listenbrainz.enabled or lastfm.enabled),
+    )
+
+
+@router.post("/for-you/refresh")
+async def refresh_for_you(session: SessionDep, user: CurrentUser) -> dict[str, Any]:
+    """Queue a rebuild of this listener's suggestions."""
+    job = queue.enqueue(
+        session, queue.RECOMMENDATIONS, {"user_id": user.id}, unique=False
+    )
+    return {"queued": True, "job_id": job.id if job else None}
+
+
+@router.post("/for-you/hide/{recommendation_id}")
+async def hide_recommendation(
+    recommendation_id: int, session: SessionDep, user: CurrentUser
+) -> dict[str, bool]:
+    """Hide one suggestion, and keep it hidden through later runs."""
+    row = session.get(Recommendation, recommendation_id)
+    if row is None or row.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Unknown recommendation")
+    row.ignored = True
+    session.commit()
+    return {"hidden": True}

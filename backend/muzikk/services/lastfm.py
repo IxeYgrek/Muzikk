@@ -210,17 +210,42 @@ class LastfmClient(HttpService):
             results.append({"album": name, "artist": artist})
         return results
 
-    async def similar_artists(
-        self, *, name: str = "", mbid: str | None = None, limit: int = 20
+    async def top_albums(
+        self, username: str, *, limit: int = 25, period: str = "overall"
     ) -> list[dict[str, Any]]:
-        """Artists Last.fm puts next to this one, keeping only the identified ones."""
-        if not self.configured or not (name or mbid):
+        """The albums this account played most. Public, so no session needed."""
+        if not self.configured or not username:
             return []
         try:
             payload = await self._call(
-                "artist.getSimilar",
-                {"artist": name or None, "mbid": mbid, "limit": limit, "autocorrect": 1},
+                "user.getTopAlbums", {"user": username, "limit": limit, "period": period}
             )
+        except ServiceError as exc:
+            logger.debug("Last.fm top albums failed for %s: %s", username, exc.message)
+            return []
+        found = (payload.get("topalbums") or {}).get("album") or []
+        return [item for item in found if isinstance(item, dict)]
+
+    async def similar_artists(
+        self, *, name: str = "", mbid: str | None = None, limit: int = 20
+    ) -> list[dict[str, Any]]:
+        """Artists Last.fm puts next to this one, keeping only the identified ones.
+
+        An identifier wins over a name, and the two are never sent together: a
+        stale MBID combined with autocorrect had Last.fm answer with somebody
+        else's neighbours entirely, which is how an unrelated artist ended up
+        being recommended.
+        """
+        if not self.configured or not (name or mbid):
+            return []
+        query: dict[str, Any] = {"limit": limit}
+        if mbid:
+            query["mbid"] = mbid
+        else:
+            query["artist"] = name
+            query["autocorrect"] = 1
+        try:
+            payload = await self._call("artist.getSimilar", query)
         except ServiceError as exc:
             logger.debug("Last.fm similar artists failed for %s: %s", mbid or name, exc.message)
             return []

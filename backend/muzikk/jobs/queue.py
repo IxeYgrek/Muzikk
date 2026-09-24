@@ -30,6 +30,9 @@ METADATA_SCAN = "metadata_scan"
 ARTWORK_SYNC = "artwork_sync"
 JELLYFIN_COVERS = "jellyfin_covers"
 JELLYFIN_METADATA = "jellyfin_metadata"
+# Unlike every other job, this one is per listener: a taste belongs to a person.
+# An empty payload means "everyone who connected a service".
+RECOMMENDATIONS = "recommendations"
 
 
 def enqueue(

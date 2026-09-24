@@ -433,6 +433,89 @@ class WatchedRelease(Base):
     )
 
 
+class RecommendationKind:
+    """What a stored suggestion points at."""
+
+    ARTIST = "artist"
+    ALBUM = "album"
+    ALL = (ARTIST, ALBUM)
+
+
+class RecommendationSection:
+    """Which shelf of the Discover page a suggestion belongs on.
+
+    The split is not cosmetic: something already in the library is played, and
+    something missing is requested. Two different buttons, so two different
+    sections rather than one grid where half the cards behave differently.
+    """
+
+    # Owned already: worth playing again rather than downloading.
+    REDISCOVER = "rediscover"
+    # Missing: worth a request.
+    DISCOVER = "discover"
+    # Just out, by an artist this listener follows through their own history.
+    FRESH = "fresh"
+    ALL = (REDISCOVER, DISCOVER, FRESH)
+
+
+class Recommendation(Base):
+    """One suggestion, computed in the background and read instantly.
+
+    Building these means dozens of calls across two services and MusicBrainz,
+    far too slow to do while somebody waits for a page. A job writes them, the
+    page reads them, and the row keeps the artist it was derived from so the
+    card can say why it is being proposed.
+    """
+
+    __tablename__ = "recommendation"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("user.id", ondelete="CASCADE"), index=True)
+    kind: Mapped[str] = mapped_column(String(16), default=RecommendationKind.ALBUM)
+    section: Mapped[str] = mapped_column(String(16), default=RecommendationSection.DISCOVER)
+
+    # An album suggestion carries the release group; an artist suggestion does
+    # not, which is why neither column can be required.
+    release_group_mbid: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    artist_mbid: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    title: Mapped[str] = mapped_column(String(500), default="")
+    artist_name: Mapped[str] = mapped_column(String(500), default="")
+
+    # Why this is here: the artist it was derived from, and which services
+    # agreed. Shown on the card, because a suggestion without a reason reads as
+    # a random one.
+    seed_name: Mapped[str] = mapped_column(String(500), default="")
+    seed_mbid: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    sources: Mapped[list[str]] = mapped_column(JSON, default=list)
+    score: Mapped[float] = mapped_column(Float, default=0.0)
+
+    # The card as it was built, so the grid needs no second lookup.
+    payload: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    # Hidden by the listener, and kept hidden across runs.
+    ignored: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    __table_args__ = (
+        Index("ix_recommendation_user_section", "user_id", "section", "kind"),
+    )
+
+
+class RecommendationRun(Base):
+    """When a listener's suggestions were last computed, and what came out."""
+
+    __tablename__ = "recommendation_run"
+
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("user.id", ondelete="CASCADE"), primary_key=True
+    )
+    started_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # "listenbrainz", "lastfm", or "library" when nothing was connected.
+    sources: Mapped[list[str]] = mapped_column(JSON, default=list)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    report: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+
+
 class WishlistItem(Base):
     __tablename__ = "wishlist_item"
 

@@ -26,13 +26,31 @@ export type SearchResponse = {
   items: AlbumCard[]
 }
 
+/** What a suggestion carries on top of the card itself. */
+export type Suggested = {
+  id: number
+  /** The artist it was derived from: the reason shown on the card. */
+  seed_name: string
+  sources: string[]
+}
+
+export type SuggestedAlbum = AlbumCard & Suggested
+export type SuggestedArtist = Artist & Suggested
+
 export type RecommendationResponse = {
-  items: AlbumCard[]
-  artists: Artist[]
+  /** Missing from the library, so these can be requested. */
+  items: SuggestedAlbum[]
+  artists: SuggestedArtist[]
+  /** Already owned: played rather than downloaded. */
+  rediscover: SuggestedAlbum[]
+  /** Just out, by artists this listener plays. */
+  fresh: SuggestedAlbum[]
   /** 'listenbrainz', 'lastfm', or 'library' when no account is connected. */
   sources: string[]
-  /** Artists the albums were drawn from, shown to explain a suggestion. */
-  seeds: string[]
+  computed_at: string | null
+  running: boolean
+  connected: boolean
+  available: boolean
 }
 
 export type ListeningAccounts = {

@@ -27,6 +27,26 @@ logger = logging.getLogger(__name__)
 SUBMIT_TIMEOUT = 15.0
 
 
+def _fresh_rows(releases: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Fresh release rows reduced to what a card needs."""
+    found: list[dict[str, Any]] = []
+    for row in releases:
+        group = (row.get("release_group_mbid") or "").strip()
+        if not group:
+            continue
+        found.append(
+            {
+                "release_group_mbid": group,
+                "title": row.get("release_name") or "",
+                "artist": row.get("artist_credit_name") or "",
+                "artist_mbid": (row.get("artist_mbids") or [None])[0],
+                "date": row.get("release_date") or "",
+                "primary_type": row.get("release_group_primary_type") or "Album",
+            }
+        )
+    return found
+
+
 class ListenBrainzClient(HttpService):
     service_name = "listenbrainz"
 
@@ -117,25 +137,174 @@ class ListenBrainzClient(HttpService):
 
     # --------------------------------------------------------------- reading
 
-    async def top_artists(self, username: str, *, count: int = 25, range_: str = "month") -> list[dict[str, Any]]:
-        """The artists this account listened to most, newest window first.
+    async def _stats(
+        self, username: str, entity: str, *, count: int, range_: str
+    ) -> list[dict[str, Any]]:
+        """One statistics page, or nothing at all.
 
-        Answers 204 with no body while the statistics are still being computed
-        for a fresh account, which is reported as an empty list.
+        Answers 204 with no body while the figures are still being computed for
+        a fresh account, which arrives here as an empty list rather than as a
+        failure worth reporting.
         """
         if not self.configured or not username:
             return []
         try:
             payload = await self.request(
                 "GET",
-                f"/1/stats/user/{username}/artists",
+                f"/1/stats/user/{username}/{entity}",
                 params={"count": count, "range": range_},
                 headers=self._headers(),
             )
         except ServiceError as exc:
-            logger.debug("ListenBrainz top artists failed for %s: %s", username, exc.message)
+            logger.debug("ListenBrainz %s stats failed for %s: %s", entity, username, exc.message)
             return []
-        return ((payload or {}).get("payload") or {}).get("artists") or []
+        return ((payload or {}).get("payload") or {}).get(entity.replace("-", "_")) or []
+
+    async def top_artists(
+        self, username: str, *, count: int = 25, range_: str = "all_time"
+    ) -> list[dict[str, Any]]:
+        """The artists this account listened to most.
+
+        The window defaults to everything: a listener with a few hundred listens
+        has almost nothing in a one-month slice, and a taste read from too few
+        plays produces suggestions that look drawn from a hat.
+        """
+        return await self._stats(username, "artists", count=count, range_=range_)
+
+    async def top_release_groups(
+        self, username: str, *, count: int = 25, range_: str = "all_time"
+    ) -> list[dict[str, Any]]:
+        """The albums this account listened to most.
+
+        Album-level taste is sharper than artist-level: somebody who plays one
+        record of an artist over and over is saying something more precise than
+        somebody who plays a bit of everything.
+        """
+        return await self._stats(username, "release-groups", count=count, range_=range_)
+
+    async def top_genres(self, username: str, *, range_: str = "all_time") -> list[str]:
+        """The genres this account actually listens to, most played first."""
+        rows = await self._stats(username, "genre-activity", count=25, range_=range_)
+        found = [
+            ((row.get("genre") or "").strip().lower(), int(row.get("listen_count") or 0))
+            for row in rows
+            if row.get("genre")
+        ]
+        found.sort(key=lambda item: -item[1])
+        return [name for name, _ in found]
+
+    async def personal_fresh_releases(
+        self, username: str, *, days: int = 60
+    ) -> list[dict[str, Any]]:
+        """Records just out by artists this account listens to.
+
+        Different from the sitewide list: this one is filtered to the listener's
+        own artists, which is what makes it worth a shelf of its own.
+        """
+        if not self.configured or not username:
+            return []
+        try:
+            payload = await self.request(
+                "GET",
+                f"/1/user/{username}/fresh_releases",
+                params={"days": min(days, 90), "sort": "release_date", "future": "false"},
+                headers=self._headers(),
+            )
+        except ServiceError as exc:
+            logger.debug("ListenBrainz user fresh releases failed for %s: %s", username, exc.message)
+            return []
+        return _fresh_rows(((payload or {}).get("payload") or {}).get("releases") or [])
+
+    async def recommended_playlist_tracks(self, username: str) -> list[dict[str, Any]]:
+        """Tracks from the playlists ListenBrainz builds for this account.
+
+        Weekly Jams and Weekly Exploration are the finest signal the service
+        offers, but they are lists of tracks and Muzikk thinks in albums, so only
+        the release each track belongs to is kept.
+        """
+        if not self.configured or not username:
+            return []
+        try:
+            index = await self.request(
+                "GET",
+                f"/1/user/{username}/playlists/recommendations",
+                headers=self._headers(),
+            )
+        except ServiceError as exc:
+            logger.debug("ListenBrainz recommendation playlists failed: %s", exc.message)
+            return []
+
+        tracks: list[dict[str, Any]] = []
+        for entry in (index or {}).get("playlists") or []:
+            playlist = (entry or {}).get("playlist") or {}
+            identifier = str(playlist.get("identifier") or "")
+            mbid = identifier.rstrip("/").rsplit("/", 1)[-1]
+            if not mbid:
+                continue
+            # "jams" is what the listener already knows, "exploration" is not.
+            title = (playlist.get("title") or "").lower()
+            familiar = "jam" in title
+            try:
+                detail = await self.request(
+                    "GET", f"/1/playlist/{mbid}", headers=self._headers()
+                )
+            except ServiceError:
+                continue
+            for item in ((detail or {}).get("playlist") or {}).get("track") or []:
+                extension = (item.get("extension") or {}).get(
+                    "https://musicbrainz.org/doc/jspf#track"
+                ) or {}
+                release = (extension.get("release_identifier") or "").rstrip("/").rsplit("/", 1)[-1]
+                artists = item.get("creator") or ""
+                if not release:
+                    continue
+                tracks.append(
+                    {
+                        "release_mbid": release,
+                        "title": item.get("album") or item.get("title") or "",
+                        "artist": artists,
+                        "familiar": familiar,
+                        "playlist": playlist.get("title") or "",
+                    }
+                )
+        return tracks
+
+    async def top_release_groups_for_artist(
+        self, artist_mbid: str, *, limit: int = 5
+    ) -> list[dict[str, Any]]:
+        """An artist's most listened albums, best first.
+
+        Used so a suggested artist is represented by the record people actually
+        play rather than by whatever their discography lists first.
+        """
+        if not self.configured or not artist_mbid:
+            return []
+        try:
+            payload = await self.request(
+                "GET",
+                f"/1/popularity/top-release-groups-for-artist/{artist_mbid}",
+                headers=self._headers(),
+            )
+        except ServiceError as exc:
+            logger.debug("ListenBrainz artist popularity failed for %s: %s", artist_mbid, exc.message)
+            return []
+
+        found: list[dict[str, Any]] = []
+        for row in payload or []:
+            group = (row.get("release_group") or {}) or {}
+            mbid = (group.get("mbid") or row.get("release_group_mbid") or "").strip()
+            if not mbid:
+                continue
+            found.append(
+                {
+                    "release_group_mbid": mbid,
+                    "title": group.get("name") or (row.get("release") or {}).get("name") or "",
+                    "artist": (row.get("artist") or {}).get("name") or "",
+                    "date": (row.get("release") or {}).get("date") or "",
+                    "listen_count": int(row.get("total_listen_count") or 0),
+                }
+            )
+        return found[:limit]
 
     async def fresh_releases(self, *, days: int = 30, limit: int = 60) -> list[dict[str, Any]]:
         """Records just out, or about to be, across the whole service.
@@ -159,23 +328,8 @@ class ListenBrainzClient(HttpService):
             logger.debug("ListenBrainz fresh releases failed: %s", exc.message)
             return []
 
-        found = ((payload or {}).get("payload") or {}).get("releases") or []
-        results: list[dict[str, Any]] = []
-        for row in found:
-            group = (row.get("release_group_mbid") or "").strip()
-            if not group:
-                continue
-            results.append(
-                {
-                    "release_group_mbid": group,
-                    "title": row.get("release_name") or "",
-                    "artist": row.get("artist_credit_name") or "",
-                    "artist_mbid": (row.get("artist_mbids") or [None])[0],
-                    "date": row.get("release_date") or "",
-                    "primary_type": row.get("release_group_primary_type") or "Album",
-                }
-            )
-        return results[:limit]
+        rows = ((payload or {}).get("payload") or {}).get("releases") or []
+        return _fresh_rows(rows)[:limit]
 
     async def similar_artists(self, artist_mbid: str, *, limit: int = 20) -> list[dict[str, Any]]:
         """Artists the listening data puts next to this one.

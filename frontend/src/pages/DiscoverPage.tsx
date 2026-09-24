@@ -3,52 +3,18 @@ import clsx from 'clsx'
 import { RefreshCw, Sparkles } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link } from 'react-router-dom'
 
 import { AlbumGrid, AlbumGridSkeleton } from '../components/AlbumCard'
-import { ArtistGrid } from '../components/ArtistCard'
+import { Suggestions } from '../components/Suggestions'
 import { Button, Card, Select, Tabs } from '../components/ui'
 import { api } from '../lib/api'
 import { useAlbumRequest } from '../lib/hooks'
 import type { AlbumCard, RecommendationResponse, SearchResponse } from '../lib/types'
 
-/** Where the suggestions came from, spelled out for the listener. */
-function SourceNote({ data }: { data: RecommendationResponse }) {
-  const { t } = useTranslation()
-  const services = data.sources.filter((name) => name !== 'library')
-
-  return (
-    <Card className="flex items-start gap-2.5 p-3.5 text-sm text-ink-300">
-      <Sparkles className="mt-0.5 size-4 shrink-0 text-brand-300" />
-      <div className="space-y-1">
-        {services.length > 0 ? (
-          <p>
-            {t('discover.forYouFrom', {
-              services: services
-                .map((name) => (name === 'lastfm' ? 'Last.fm' : 'ListenBrainz'))
-                .join(' · '),
-            })}
-          </p>
-        ) : (
-          <p>
-            {t('discover.forYouFromLibrary')}{' '}
-            <Link to="/account" className="text-brand-300 hover:underline">
-              {t('discover.forYouConnect')}
-            </Link>
-          </p>
-        )}
-        {data.seeds.length > 0 && (
-          <p className="hint">{t('discover.forYouArtists', { artists: data.seeds.join(', ') })}</p>
-        )}
-      </div>
-    </Card>
-  )
-}
-
 export function DiscoverPage() {
   const { t } = useTranslation()
   const { request, pendingId } = useAlbumRequest()
-  const [tab, setTab] = useState('new')
+  const [tab, setTab] = useState('forYou')
   const [months, setMonths] = useState(3)
   const [genre, setGenre] = useState('')
   const [seed, setSeed] = useState(0)
@@ -57,6 +23,16 @@ export function DiscoverPage() {
     queryKey: ['discover', 'genres'],
     queryFn: () => api<string[]>('/discover/genres'),
     staleTime: 10 * 60_000,
+  })
+
+  // Read from the table a background job fills, so this is cheap. It is polled
+  // while a run is in flight, which is the only time the answer changes on its
+  // own.
+  const forYou = useQuery({
+    queryKey: ['discover', 'for-you'],
+    queryFn: () => api<RecommendationResponse>('/discover/for-you'),
+    enabled: tab === 'forYou',
+    refetchInterval: (query) => (query.state.data?.running ? 4000 : false),
   })
 
   const newReleases = useQuery({
@@ -68,9 +44,10 @@ export function DiscoverPage() {
 
   const byGenre = useQuery({
     queryKey: ['discover', 'genre', genre],
-    queryFn: () => api<SearchResponse>(`/discover/genre/${encodeURIComponent(genre)}`, {
-      query: { limit: 48 },
-    }),
+    queryFn: () =>
+      api<SearchResponse>(`/discover/genre/${encodeURIComponent(genre)}`, {
+        query: { limit: 48 },
+      }),
     enabled: tab === 'genre' && Boolean(genre),
   })
 
@@ -81,28 +58,17 @@ export function DiscoverPage() {
     staleTime: 0,
   })
 
-  // Built from external services, so it is slow enough to be worth keeping.
-  const forYou = useQuery({
-    queryKey: ['discover', 'for-you'],
-    queryFn: () => api<RecommendationResponse>('/discover/for-you'),
-    enabled: tab === 'forYou',
-    staleTime: 15 * 60_000,
-  })
-
   const loading =
     (tab === 'new' && newReleases.isLoading) ||
     (tab === 'genre' && byGenre.isLoading) ||
-    (tab === 'missing' && missing.isFetching) ||
-    (tab === 'forYou' && forYou.isLoading)
+    (tab === 'missing' && missing.isFetching)
 
   const albums =
     tab === 'new'
       ? (newReleases.data?.items ?? [])
       : tab === 'genre'
         ? (byGenre.data?.items ?? [])
-        : tab === 'forYou'
-          ? (forYou.data?.items ?? [])
-          : (missing.data ?? [])
+        : (missing.data ?? [])
 
   return (
     <div className="space-y-6">
@@ -143,14 +109,18 @@ export function DiscoverPage() {
             {t('discover.shuffle')}
           </Button>
         )}
-
-        {tab === 'forYou' && (
-          <Button size="sm" onClick={() => void forYou.refetch()}>
-            <RefreshCw className={clsx('size-3.5', forYou.isFetching && 'animate-spin')} />
-            {t('common.refresh')}
-          </Button>
-        )}
       </div>
+
+      {tab === 'forYou' &&
+        (forYou.isLoading ? (
+          <AlbumGridSkeleton count={12} />
+        ) : forYou.data ? (
+          <Suggestions
+            data={forYou.data}
+            onRequest={(album, isUpgrade) => request(album, isUpgrade)}
+            pendingId={pendingId}
+          />
+        ) : null)}
 
       {tab === 'genre' && (
         <div className="flex flex-wrap gap-1.5">
@@ -174,29 +144,17 @@ export function DiscoverPage() {
         </Card>
       )}
 
-      {tab === 'forYou' && forYou.data && <SourceNote data={forYou.data} />}
-
-      {tab === 'forYou' && (forYou.data?.artists.length ?? 0) > 0 && (
-        <section className="space-y-3">
-          <h2 className="font-display text-lg text-ink-100">{t('discover.forYouArtistsTitle')}</h2>
-          <ArtistGrid artists={forYou.data?.artists ?? []} />
-        </section>
-      )}
-
-      {tab === 'forYou' && (forYou.data?.items.length ?? 0) > 0 && (
-        <h2 className="font-display text-lg text-ink-100">{t('discover.forYouAlbumsTitle')}</h2>
-      )}
-
-      {loading ? (
-        <AlbumGridSkeleton count={18} />
-      ) : (
-        <AlbumGrid
-          albums={albums}
-          onRequest={(album, isUpgrade) => request(album, isUpgrade)}
-          pendingId={pendingId}
-          emptyTitle={t('home.noResults')}
-        />
-      )}
+      {tab !== 'forYou' &&
+        (loading ? (
+          <AlbumGridSkeleton count={18} />
+        ) : (
+          <AlbumGrid
+            albums={albums}
+            onRequest={(album, isUpgrade) => request(album, isUpgrade)}
+            pendingId={pendingId}
+            emptyTitle={t('home.noResults')}
+          />
+        ))}
     </div>
   )
 }

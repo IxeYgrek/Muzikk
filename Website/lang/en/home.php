@@ -142,9 +142,13 @@ return [
                     . 'actually listen to, rather than from a genre you picked once.',
                 'items' => [
                     'A <strong>For you</strong> tab reads your listening history and asks both services '
-                        . 'which artists sit closest to the ones you play. It suggests those '
-                        . '<strong>artists</strong>, and the <strong>albums</strong> of theirs your '
-                        . 'library does not hold yet — one click from a request.',
+                        . 'which artists sit closest to the ones you play. Every card says why it is '
+                        . 'there — <em>close to Röyksopp</em> — so a suggestion never reads as a random '
+                        . 'one, and anything you are not interested in is hidden for good.',
+                    'Three shelves, because they call for three different gestures: '
+                        . '<strong>artists and albums to discover</strong>, which you request; what has '
+                        . '<strong>just come out</strong> from the artists you play; and '
+                        . '<strong>albums you already own</strong>, which you simply play again.',
                     'The other tabs benefit too: a genre is ordered by what Last.fm says it is best '
                         . 'known for, and new releases include the fresh-releases list ListenBrainz '
                         . 'keeps, rather than everything a catalogue happened to register that month.',

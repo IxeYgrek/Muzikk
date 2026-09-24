@@ -95,10 +95,17 @@ return [
                     . 'key at all — reading a public listening history is open, and writing only needs the '
                     . 'listener\'s own token.'],
                 ['type' => 'p', 'text' => 'Once connected, the <em>For you</em> tab of the Discover page asks '
-                    . 'both services which artists sit closest to the ones you listen to, then proposes those '
-                    . 'artists and the albums of theirs your library is missing. With nothing connected it '
-                    . 'falls back on the artists you own most, which works but knows nothing of what you '
-                    . 'actually play.'],
+                    . 'both services which artists sit closest to the ones you listen to. It then lays the '
+                    . 'answer out on three shelves, because each one calls for a different gesture: artists '
+                    . 'and albums to <strong>discover</strong>, which you request; what has <strong>just come '
+                    . 'out</strong> from the artists you play; and albums you <strong>already own</strong>, '
+                    . 'which you simply play again. Every card names the artist it was derived from, and can '
+                    . 'be hidden for good.'],
+                ['type' => 'note', 'text' => 'Those suggestions are computed in the background, not while the '
+                    . 'page loads: one pass means dozens of calls across both services and MusicBrainz. It '
+                    . 'runs twice a day, and the page has a button to ask for it sooner. With nothing '
+                    . 'connected the tab falls back on the artists you own most, which works but knows '
+                    . 'nothing of what you actually play.'],
                 ['type' => 'p', 'text' => 'The rest of the Discover page uses them where they know something '
                     . 'MusicBrainz does not. <em>By genre</em> stays a MusicBrainz list — it is the only '
                     . 'catalogue whose album pages can be opened by identifier — but Last.fm reorders it by '

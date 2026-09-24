@@ -185,6 +185,11 @@ check(
     merged[0],
 )
 check(
+    "every suggestion remembers the artist it came from",
+    all(row.seed_name == "Oasis" and row.seed_mbid == SEED for row in merged),
+    [(row.name, row.seed_name) for row in merged],
+)
+check(
     "a service is not allowed to win on its own scale",
     # Suede scores 40 at ListenBrainz and Pulp 1.0 at Last.fm: normalised, both
     # are a perfect 1.0, so neither may outrank the agreed-on artist.
@@ -210,35 +215,62 @@ check("the best represented artist seeds first", seeds and seeds[0].name == "Air
 
 # ------------------------------------------------------- artists as suggestions
 
-cards = recommend._as_artist_cards(
-    session,
-    User(id=1, name="x"),
-    [
-        recommend.Suggestion(artist_mbid=SEED, name="Daft Punk", sources={"lastfm"}),
-        recommend.Suggestion(
-            artist_mbid="eeeeeeee-0000-0000-0000-000000000005",
-            name="Justice",
-            sources={"lastfm", "listenbrainz"},
-        ),
-        # No name: nothing to show on a card.
-        recommend.Suggestion(artist_mbid="ffffffff-0000-0000-0000-000000000006", name=""),
-    ],
-    limit=10,
+from muzikk.models import RecommendationKind as Kind  # noqa: E402
+from muzikk.services.musicbrainz import MusicBrainzClient  # noqa: E402
+
+owner = User(id=1, name="x")
+
+
+async def no_popularity(self, artist_mbid, *, limit=5):  # type: ignore[no-untyped-def]
+    return []
+
+
+async def no_discography(self, artist_mbid, *, limit=100, offset=0):  # type: ignore[no-untyped-def]
+    return {"release-groups": []}
+
+
+saved = (
+    ListenBrainzClient.top_release_groups_for_artist,
+    MusicBrainzClient.browse_artist_release_groups,
 )
-check("a nameless suggestion is not shown", len(cards) == 2, [card.name for card in cards])
+ListenBrainzClient.top_release_groups_for_artist = no_popularity  # type: ignore[assignment]
+MusicBrainzClient.browse_artist_release_groups = no_discography  # type: ignore[assignment]
+try:
+    rows, artist_count, album_count = asyncio.run(
+        recommend._discover_rows(
+            session,
+            owner,
+            [
+                # Already in the library seeded earlier: not a discovery.
+                recommend.Suggestion(artist_mbid=SEED, name="Daft Punk", sources={"lastfm"}),
+                recommend.Suggestion(
+                    artist_mbid="eeeeeeee-0000-0000-0000-000000000005",
+                    name="Justice",
+                    seed_name="Air",
+                    sources={"lastfm", "listenbrainz"},
+                ),
+                # No name: nothing to put on a card.
+                recommend.Suggestion(artist_mbid="ffffffff-0000-0000-0000-000000000006", name=""),
+            ],
+        )
+    )
+finally:
+    ListenBrainzClient.top_release_groups_for_artist = saved[0]  # type: ignore[assignment]
+    MusicBrainzClient.browse_artist_release_groups = saved[1]  # type: ignore[assignment]
+
+names = [row.title for row in rows if row.kind == Kind.ARTIST]
+check("an artist already in the library is not a discovery", "Daft Punk" not in names, names)
+check("a nameless suggestion is dropped", names == ["Justice"], names)
+check("the count matches what was kept", artist_count == 1 and album_count == 0, (artist_count, album_count))
 check(
-    "an artist already in the library is flagged",
-    next(card.in_library for card in cards if card.name == "Daft Punk"),
-    cards[0],
+    "the card keeps the artist it came from",
+    rows and rows[0].seed_name == "Air",
+    rows[0].seed_name if rows else "",
 )
 check(
-    "agreement between services is spelled out",
-    next(card.disambiguation for card in cards if card.name == "Justice") == "lastfm · listenbrainz",
-    cards[1],
-)
-check(
-    "a single source says nothing",
-    next(card.disambiguation for card in cards if card.name == "Daft Punk") is None,
+    "and which services agreed",
+    rows and rows[0].sources == ["lastfm", "listenbrainz"],
+    rows[0].sources if rows else [],
 )
 
 # -------------------------------------------------------- nothing connected
@@ -256,6 +288,81 @@ check("the token is not stored in clear", (listener.listenbrainz_token or "").st
 check("but reads back", users_service.listenbrainz_token(listener) == "tok")
 users_service.set_listening_accounts(session, listener, listenbrainz_token_value="")
 check("and can be disconnected", listener.listenbrainz_token is None)
+
+# ------------------------------------------------------------ stored shelves
+
+from muzikk.models import Recommendation, RecommendationKind, RecommendationRun  # noqa: E402
+from muzikk.models import RecommendationSection as Shelf  # noqa: E402
+
+# Nothing connected: the run leans on the library and still writes a report.
+report = asyncio.run(recommend.refresh_for(session, listener))
+check("a run reports what it produced", "seeds" in report and "albums" in report, report)
+run = session.get(RecommendationRun, listener.id)
+check("the run is recorded as finished", run is not None and run.finished_at is not None)
+check("with no error", run is not None and run.error is None, run.error if run else "")
+check(
+    "and names the library as its source",
+    run is not None and run.sources == ["library"],
+    run.sources if run else [],
+)
+
+# A hidden suggestion survives the next run, which is the whole point of the flag.
+session.add(
+    Recommendation(
+        user_id=listener.id,
+        kind=RecommendationKind.ARTIST,
+        section=Shelf.DISCOVER,
+        artist_mbid="99999999-0000-0000-0000-000000000009",
+        title="Unwanted",
+        artist_name="Unwanted",
+        ignored=True,
+        payload={"mbid": "99999999-0000-0000-0000-000000000009", "name": "Unwanted"},
+    )
+)
+session.commit()
+
+
+async def one_unwanted(self, seeds):  # type: ignore[no-untyped-def]
+    return [
+        recommend.Suggestion(
+            artist_mbid="99999999-0000-0000-0000-000000000009",
+            name="Unwanted",
+            seed_name="Air",
+            sources={"listenbrainz"},
+        )
+    ]
+
+
+original_similar = recommend.similar_to
+recommend.similar_to = lambda session, seeds: one_unwanted(None, seeds)  # type: ignore[assignment]
+try:
+    asyncio.run(recommend.refresh_for(session, listener))
+finally:
+    recommend.similar_to = original_similar  # type: ignore[assignment]
+
+hidden = (
+    session.query(Recommendation)
+    .filter(Recommendation.user_id == listener.id, Recommendation.title == "Unwanted")
+    .one_or_none()
+)
+check("a hidden suggestion stays hidden after a new run", hidden is not None and hidden.ignored, hidden)
+
+# Only listeners who connected something are refreshed on a schedule: reading a
+# taste for somebody who asked for none would send their data nowhere useful.
+users_service.set_listening_accounts(
+    session, listener, listenbrainz_user="", lastfm_user=""
+)
+summary = asyncio.run(recommend.refresh_all(session))
+check(
+    "an account with no service connected is left alone",
+    summary["listeners"] == 0,
+    summary,
+)
+
+# A handle alone is enough: suggestions only need to read the history.
+users_service.set_listening_accounts(session, listener, listenbrainz_user="ada")
+summary = asyncio.run(recommend.refresh_all(session))
+check("one that connected a handle is refreshed", summary["listeners"] == 1, summary)
 
 settings_service.invalidate_cache()
 session.close()

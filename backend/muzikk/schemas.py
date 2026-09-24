@@ -108,18 +108,6 @@ class SearchResponse(BaseModel):
     items: list[AlbumCard]
 
 
-class RecommendationResponse(BaseModel):
-    items: list[AlbumCard] = Field(default_factory=list)
-    # Artists worth a listen, from the same pass that found the albums.
-    artists: list["ArtistOut"] = Field(default_factory=list)
-    # Which services the taste was read from: "listenbrainz", "lastfm", or
-    # "library" when nothing is connected and the shelves had to stand in.
-    sources: list[str] = Field(default_factory=list)
-    # The artists the albums were drawn from, shown so the listener can see why
-    # something is being proposed.
-    seeds: list[str] = Field(default_factory=list)
-
-
 class ListeningAccounts(BaseModel):
     """What the signed-in listener connected, never the tokens themselves."""
 
@@ -195,6 +183,43 @@ class ArtistOut(BaseModel):
     genres: list[str] = Field(default_factory=list)
     watched: bool = False
     in_library: bool = False
+
+
+class Suggested(BaseModel):
+    """What every suggestion carries on top of the card itself."""
+
+    # Identifies the row, so a suggestion can be hidden for good.
+    id: int = 0
+    # The artist this was derived from: the reason shown on the card.
+    seed_name: str = ""
+    sources: list[str] = Field(default_factory=list)
+
+
+class SuggestedAlbum(AlbumCard, Suggested):
+    pass
+
+
+class SuggestedArtist(ArtistOut, Suggested):
+    pass
+
+
+class RecommendationResponse(BaseModel):
+    # Missing from the library, so these can be requested.
+    items: list[SuggestedAlbum] = Field(default_factory=list)
+    artists: list[SuggestedArtist] = Field(default_factory=list)
+    # Already owned, so these are played rather than downloaded.
+    rediscover: list[SuggestedAlbum] = Field(default_factory=list)
+    # Just out, by artists this listener plays.
+    fresh: list[SuggestedAlbum] = Field(default_factory=list)
+    # Which services the taste was read from: "listenbrainz", "lastfm", or
+    # "library" when nothing is connected and the shelves had to stand in.
+    sources: list[str] = Field(default_factory=list)
+    computed_at: datetime | None = None
+    running: bool = False
+    # Whether this listener connected an account, and whether the installation
+    # offers any to connect. The page explains itself differently for each.
+    connected: bool = False
+    available: bool = False
 
 
 class LabelOut(BaseModel):
