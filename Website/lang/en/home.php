@@ -11,7 +11,7 @@ return [
         'lead' => 'Muzikk sits between your MusicBrainz catalogue and your Jellyfin (or local) library. '
             . 'Ask for an album, and it finds it on Soulseek or BitTorrent, checks it, tags it, '
             . 'files it under your own naming scheme and, when Jellyfin is in use, tells it to look again.',
-        'ctaDocs' => 'Read the documentation',
+        'ctaDocs' => 'Installation guide',
         'ctaDownload' => 'Get Muzikk',
         'badges' => [
             'One container',
@@ -135,6 +135,27 @@ return [
                 ],
             ],
             [
+                'id' => 'recommendations',
+                'icon' => 'sparkles',
+                'title' => 'Music recommendations',
+                'lead' => 'Connect ListenBrainz or Last.fm and Muzikk suggests albums from what you '
+                    . 'actually listen to, rather than from a genre you picked once.',
+                'items' => [
+                    'A <strong>For you</strong> tab reads your listening history and asks both services '
+                        . 'which artists sit closest to the ones you play. It suggests those '
+                        . '<strong>artists</strong>, and the <strong>albums</strong> of theirs your '
+                        . 'library does not hold yet — one click from a request.',
+                    'The other tabs benefit too: a genre is ordered by what Last.fm says it is best '
+                        . 'known for, and new releases include the fresh-releases list ListenBrainz '
+                        . 'keeps, rather than everything a catalogue happened to register that month.',
+                    '<strong>Scrobbling</strong> works the other way round: what you play in Muzikk is '
+                        . 'sent to ListenBrainz and to Last.fm, so the history that feeds the suggestions '
+                        . 'keeps growing on its own.',
+                    'Both are optional and personal: each listener connects their own account from their '
+                        . 'own page, and nothing leaves the server for anyone who connects neither.',
+                ],
+            ],
+            [
                 'id' => 'metadata',
                 'icon' => 'tag',
                 'title' => 'Full metadata management',
@@ -197,7 +218,7 @@ return [
                 'id' => 'administration',
                 'icon' => 'sliders',
                 'title' => 'Administration',
-                'lead' => 'Fifteen sections, saved one at a time. Each integration has a Test connection '
+                'lead' => 'One section at a time, saved on its own. Each integration has a Test connection '
                     . 'button that uses what is on screen, even unsaved, and every secret is encrypted at rest.',
                 'groups' => [
                     [
@@ -216,6 +237,8 @@ return [
                                 . 'triggered after import, and an optional allow-list of Jellyfin user ids.',
                             '<strong>MusicBrainz</strong> — local instance URL, public fallback and its URL, '
                                 . 'one rate limit for each, and the contact sent in the User-Agent.',
+                            '<strong>ListenBrainz</strong> and <strong>Last.fm</strong> — turned on here, then '
+                                . 'connected by each listener on their own page, for suggestions and scrobbling.',
                             '<strong>Cover Art Archive</strong> — URL, preferred size, embedding in files, '
                                 . '<code>cover.jpg</code> and <code>folder.jpg</code>.',
                             '<strong>slskd</strong> — URL, API key, URL prefix, the download folder as Muzikk '
@@ -260,7 +283,8 @@ return [
                         'items' => [
                             'Playback on or off, reading files directly from the music folder, thirty '
                                 . 'second previews, a maximum relay bitrate, and play reporting to Jellyfin '
-                                . 'when that mode is in use.',
+                                . 'when that mode is in use. Plays are scrobbled to ListenBrainz and Last.fm '
+                                . 'for whoever connected them.',
                             'Provider order: reorder Soulseek, public trackers and private trackers as a '
                                 . 'ranked list.',
                         ],
@@ -330,8 +354,9 @@ return [
     'cta' => [
         'title' => 'Ready to run it?',
         'lead' => 'A compose file, three volumes, and either a Jellyfin API key or a local administrator '
-            . 'account. The documentation walks through each service, the naming template and the usual mistakes.',
-        'docs' => 'Read the documentation',
+            . 'account. The installation guide is short on purpose; the user guide covers everything after that.',
+        'docs' => 'Installation guide',
+        'guide' => 'User guide',
         'download' => 'Go to downloads',
     ],
 ];

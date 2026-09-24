@@ -26,6 +26,31 @@ export type SearchResponse = {
   items: AlbumCard[]
 }
 
+export type RecommendationResponse = {
+  items: AlbumCard[]
+  artists: Artist[]
+  /** 'listenbrainz', 'lastfm', or 'library' when no account is connected. */
+  sources: string[]
+  /** Artists the albums were drawn from, shown to explain a suggestion. */
+  seeds: string[]
+}
+
+export type ListeningAccounts = {
+  listenbrainz_enabled: boolean
+  listenbrainz_user: string | null
+  listenbrainz_connected: boolean
+  lastfm_enabled: boolean
+  lastfm_user: string | null
+  lastfm_connected: boolean
+  /** False until an administrator has registered a Last.fm application. */
+  lastfm_can_authorize: boolean
+}
+
+export type LastfmAuthStart = {
+  token: string
+  url: string
+}
+
 export type Track = {
   position: number
   disc: number
@@ -622,6 +647,8 @@ export type PlayableTrack = {
   artist: string
   album: string
   album_id: string | null
+  /** Known when the album is indexed: lets the player reach the artist page. */
+  artist_mbid?: string | null
   track: number | null
   disc: number | null
   duration: number | null
@@ -660,6 +687,14 @@ export type Playlist = {
 
 export type PlaylistTrack = PlayableTrack & {
   playlist_item_id: string
+}
+
+export type PlaylistChange = {
+  playlist_id: string
+  name: string
+  added: number
+  /** Tracks the playlist already held, left alone rather than doubled. */
+  skipped: number
 }
 
 export type PlaylistBackupTrack = {

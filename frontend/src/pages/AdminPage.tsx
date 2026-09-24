@@ -8,6 +8,7 @@ import {
   ListOrdered,
   Music4,
   Radar,
+  Radio,
   ScanSearch,
   Server,
   Settings,
@@ -34,6 +35,8 @@ type SectionId =
   | 'general'
   | 'jellyfin'
   | 'musicbrainz'
+  | 'listenbrainz'
+  | 'lastfm'
   | 'coverart'
   | 'slskd'
   | 'prowlarr'
@@ -51,6 +54,8 @@ const SECTIONS: { id: SectionId; icon: ReactNode }[] = [
   { id: 'general', icon: <Settings className="size-4" /> },
   { id: 'jellyfin', icon: <Server className="size-4" /> },
   { id: 'musicbrainz', icon: <Database className="size-4" /> },
+  { id: 'listenbrainz', icon: <Radio className="size-4" /> },
+  { id: 'lastfm', icon: <Radio className="size-4" /> },
   { id: 'coverart', icon: <Image className="size-4" /> },
   { id: 'slskd', icon: <Music4 className="size-4" /> },
   { id: 'prowlarr', icon: <Radar className="size-4" /> },
@@ -81,6 +86,10 @@ function panelFor(section: SectionId) {
       return <SystemPanel />
     case 'musicbrainz':
       return <SettingsPanel section="musicbrainz" testService="musicbrainz" />
+    case 'listenbrainz':
+      return <SettingsPanel section="listenbrainz" testService="listenbrainz" />
+    case 'lastfm':
+      return <SettingsPanel section="lastfm" testService="lastfm" />
     case 'coverart':
       return <SettingsPanel section="coverart" testService="coverart" />
     case 'slskd':

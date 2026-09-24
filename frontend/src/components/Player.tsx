@@ -16,6 +16,7 @@ import {
 import { useState } from 'react'
 import type { CSSProperties } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Link } from 'react-router-dom'
 
 import { formatClock } from '../lib/format'
 import { useLocalMode } from '../lib/hooks'
@@ -50,6 +51,16 @@ export function Player() {
   if (!current) return null
 
   const length = duration || current.duration || 0
+
+  // An extract carries no library identifier, so there is no album page to
+  // open. The artist still has one when the index knows its MBID; otherwise
+  // the name is handed to the search, which is the only thing left to go on.
+  const albumHref = current.album_id ? `/library/albums/${current.album_id}` : null
+  const artistHref = current.artist_mbid
+    ? `/artists/${current.artist_mbid}`
+    : current.artist
+      ? `/?q=${encodeURIComponent(current.artist)}&type=artist`
+      : null
 
   return (
     <>
@@ -107,12 +118,23 @@ export function Player() {
 
         <div className="mx-auto flex w-full max-w-[100rem] items-center gap-3 px-3 pb-2.5 sm:gap-4 sm:px-6">
           <div className="flex min-w-0 flex-1 items-center gap-3">
-            <AlbumCover
-              url={current.cover_url}
-              alt=""
-              size={120}
-              className="size-11 shrink-0 rounded-lg shadow-lg"
-            />
+            {albumHref ? (
+              <Link to={albumHref} title={current.album || t('nav.library')} className="shrink-0">
+                <AlbumCover
+                  url={current.cover_url}
+                  alt=""
+                  size={120}
+                  className="size-11 rounded-lg shadow-lg transition-opacity hover:opacity-80"
+                />
+              </Link>
+            ) : (
+              <AlbumCover
+                url={current.cover_url}
+                alt=""
+                size={120}
+                className="size-11 shrink-0 rounded-lg shadow-lg"
+              />
+            )}
             <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <span className="truncate text-sm font-medium text-ink-100">{current.title}</span>
@@ -132,7 +154,25 @@ export function Player() {
                     {error !== current.title ? ` · ${error}` : ''}
                   </span>
                 ) : (
-                  [current.artist, current.album].filter(Boolean).join(' · ')
+                  <>
+                    {current.artist &&
+                      (artistHref ? (
+                        <Link to={artistHref} className="hover:text-ink-100 hover:underline">
+                          {current.artist}
+                        </Link>
+                      ) : (
+                        current.artist
+                      ))}
+                    {current.artist && current.album && ' · '}
+                    {current.album &&
+                      (albumHref ? (
+                        <Link to={albumHref} className="hover:text-ink-100 hover:underline">
+                          {current.album}
+                        </Link>
+                      ) : (
+                        current.album
+                      ))}
+                  </>
                 )}
               </div>
             </div>

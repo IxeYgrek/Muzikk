@@ -12,6 +12,7 @@ import {
   Settings,
   Star,
   Tags,
+  UserRound,
   X,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
@@ -135,14 +136,23 @@ export function Layout() {
         <div className="grid size-9 shrink-0 place-items-center rounded-full gradient-surface text-sm font-bold text-white">
           {(user?.name ?? '?').slice(0, 1).toUpperCase()}
         </div>
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-medium text-ink-100">{user?.name}</div>
+        <NavLink to="/account" className="min-w-0 flex-1" title={t('nav.account')}>
+          <div className="truncate text-sm font-medium text-ink-100 hover:text-white">
+            {user?.name}
+          </div>
           {user?.is_admin && (
             <div className="text-[0.68rem] uppercase tracking-wide text-brand-300">
               {t('admin.userAdmin')}
             </div>
           )}
-        </div>
+        </NavLink>
+        <NavLink
+          to="/account"
+          title={t('nav.account')}
+          className="rounded-lg p-2 text-ink-400 transition-colors hover:bg-ink-700/50 hover:text-ink-100"
+        >
+          <UserRound className="size-4" />
+        </NavLink>
         <button
           type="button"
           onClick={signOut}

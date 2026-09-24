@@ -7,7 +7,7 @@ declare(strict_types=1);
 
 return [
     'app_name' => 'Muzikk',
-    'app_version' => '0.1.0',
+    'app_version' => '0.2.0',
 
     // Absolute base URL used for canonical and Open Graph tags. Left empty, it
     // is derived from the incoming request.

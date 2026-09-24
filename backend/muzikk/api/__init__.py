@@ -3,6 +3,7 @@
 from fastapi import APIRouter
 
 from . import (
+    account,
     activity,
     admin,
     albums,
@@ -23,6 +24,7 @@ from . import (
 api_router = APIRouter(prefix="/api")
 api_router.include_router(setup.router)
 api_router.include_router(auth.router)
+api_router.include_router(account.router)
 api_router.include_router(albums.router)
 api_router.include_router(library.router)
 api_router.include_router(tracks.router)

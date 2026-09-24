@@ -60,6 +60,41 @@ def jellyfin_token(user: User) -> str:
     return decrypt_secret(user.jellyfin_token or "") or ""
 
 
+def listenbrainz_token(user: User) -> str:
+    return decrypt_secret(user.listenbrainz_token or "") or ""
+
+
+def lastfm_session_key(user: User) -> str:
+    return decrypt_secret(user.lastfm_session_key or "") or ""
+
+
+def set_listening_accounts(
+    session: Session,
+    user: User,
+    *,
+    listenbrainz_user: str | None = None,
+    listenbrainz_token_value: str | None = None,
+    lastfm_user: str | None = None,
+    lastfm_session_key_value: str | None = None,
+) -> None:
+    """Store the listener's own service accounts.
+
+    Passing ``None`` leaves a field alone; passing an empty string disconnects
+    it, which is the only way to take a token back out.
+    """
+    if listenbrainz_user is not None:
+        user.listenbrainz_user = listenbrainz_user.strip() or None
+    if listenbrainz_token_value is not None:
+        cleaned = listenbrainz_token_value.strip()
+        user.listenbrainz_token = encrypt_secret(cleaned) if cleaned else None
+    if lastfm_user is not None:
+        user.lastfm_user = lastfm_user.strip() or None
+    if lastfm_session_key_value is not None:
+        cleaned = lastfm_session_key_value.strip()
+        user.lastfm_session_key = encrypt_secret(cleaned) if cleaned else None
+    session.commit()
+
+
 def upsert_user(session: Session, jellyfin_user: dict[str, Any], *, touch_login: bool = False) -> User:
     jellyfin_id = jellyfin_user.get("Id")
     if not jellyfin_id:

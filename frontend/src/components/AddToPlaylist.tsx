@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next'
 import { useToast } from './Toast'
 import { Button, CenteredSpinner, EmptyState, Modal } from './ui'
 import { ApiError, api } from '../lib/api'
-import type { Playlist } from '../lib/types'
+import type { Playlist, PlaylistChange } from '../lib/types'
 
 /** What is being filed: a whole album, or a handful of tracks. */
 export type PlaylistTarget = {
@@ -34,8 +34,21 @@ export function AddToPlaylistModal({
 
   const body = { album_id: target.albumId ?? null, track_ids: target.trackIds ?? [] }
 
-  const done = (added: number) => {
-    notify(t('playlists.added', { count: added }), 'success')
+  /**
+   * Nothing added means every track was already there, which is worth saying
+   * plainly rather than announcing a success that changed nothing.
+   */
+  const done = ({ added, skipped = 0 }: PlaylistChange) => {
+    if (added === 0 && skipped > 0) {
+      notify(
+        skipped === 1 ? t('playlists.alreadyIn') : t('playlists.alreadyInMany', { count: skipped }),
+        'info',
+      )
+    } else if (skipped > 0) {
+      notify(t('playlists.addedSome', { added, skipped }), 'success')
+    } else {
+      notify(t('playlists.added', { count: added }), 'success')
+    }
     void queryClient.invalidateQueries({ queryKey: ['playlists'] })
     onClose()
   }
@@ -45,15 +58,15 @@ export function AddToPlaylistModal({
 
   const addTo = useMutation({
     mutationFn: (playlistId: string) =>
-      api<{ added: number }>(`/playlists/${playlistId}/items`, { method: 'POST', body }),
-    onSuccess: (result) => done(result.added),
+      api<PlaylistChange>(`/playlists/${playlistId}/items`, { method: 'POST', body }),
+    onSuccess: done,
     onError: fail,
   })
 
   const create = useMutation({
     mutationFn: () =>
-      api<{ added: number }>('/playlists', { method: 'POST', body: { ...body, name } }),
-    onSuccess: (result) => done(result.added),
+      api<PlaylistChange>('/playlists', { method: 'POST', body: { ...body, name } }),
+    onSuccess: done,
     onError: fail,
   })
 

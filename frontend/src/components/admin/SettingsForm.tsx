@@ -55,6 +55,20 @@ export const SECTION_FIELDS: Record<string, FieldSpec[]> = {
     { key: 'public_rate_limit_per_second', type: 'number', step: 0.5, min: 0.1 },
     { key: 'contact', type: 'text', full: true },
   ],
+  listenbrainz: [
+    { key: 'enabled', type: 'bool', full: true },
+    { key: 'url', type: 'text', placeholder: 'https://api.listenbrainz.org', full: true },
+    { key: 'labs_url', type: 'text', placeholder: 'https://labs.api.listenbrainz.org', full: true },
+    { key: 'submit_listens', type: 'bool', full: true },
+    { key: 'recommendations', type: 'bool', full: true },
+  ],
+  lastfm: [
+    { key: 'enabled', type: 'bool', full: true },
+    { key: 'api_key', type: 'text', full: true },
+    { key: 'api_secret', type: 'password', full: true },
+    { key: 'submit_listens', type: 'bool', full: true },
+    { key: 'recommendations', type: 'bool', full: true },
+  ],
   coverart: [
     { key: 'url', type: 'text', full: true },
     { key: 'preferred_size', type: 'number', min: 250 },

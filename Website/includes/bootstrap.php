@@ -110,3 +110,4 @@ require __DIR__ . '/i18n.php';
 require __DIR__ . '/icons.php';
 require __DIR__ . '/screenshots.php';
 require __DIR__ . '/layout.php';
+require __DIR__ . '/docpage.php';

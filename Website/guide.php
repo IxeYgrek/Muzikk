@@ -1,10 +1,10 @@
 <?php
 /**
- * Installation guide. Its content lives in lang/<code>/docs.php.
+ * User guide. Its content lives in lang/<code>/guide.php.
  */
 
 declare(strict_types=1);
 
 require __DIR__ . '/includes/bootstrap.php';
 
-doc_page('docs');
+doc_page('guide');

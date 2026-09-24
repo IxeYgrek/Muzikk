@@ -24,11 +24,13 @@ included, never served.
 ```
 Website/
 ├── index.php              landing page: hero, presentation, features, slideshow
-├── documentation.php      installation and configuration guide
+├── documentation.php      installation guide
+├── guide.php              user guide, for everything after the install
 ├── download.php           repository link and quick start
 ├── includes/
 │   ├── bootstrap.php      configuration accessor, URL helpers, loads the rest
 │   ├── config.php         everything an operator may want to change
+│   ├── docpage.php        renders documentation.php and guide.php alike
 │   ├── i18n.php           language negotiation and the t() helper
 │   ├── icons.php          inline SVG icons and the Muzikk mark
 │   ├── layout.php         head, header, footer, shared render helpers
@@ -37,7 +39,8 @@ Website/
 │   └── en/
 │       ├── common.php     navigation, footer, shared strings
 │       ├── home.php       hero, presentation, feature categories, captions
-│       ├── docs.php       the whole documentation, as structured blocks
+│       ├── docs.php       the installation page, as structured blocks
+│       ├── guide.php      the user guide, same block format
 │       └── download.php   download page
 └── assets/
     ├── css/               base.css (tokens), components.css, pages.css
@@ -63,8 +66,8 @@ Everything lives in `includes/config.php`.
 ## Adding a language
 
 1. Copy `lang/en` to `lang/<code>`, for instance `lang/fr`.
-2. Translate the four files. Keys are never translated, only values. Missing
-   keys fall back to the default language, so a partial translation is fine.
+2. Translate the files. Keys are never translated, only values. Missing keys
+   fall back to the default language, so a partial translation is fine.
 3. Add the entry in `includes/config.php`:
 
 ```php
@@ -95,12 +98,20 @@ blank frame.
 
 ## Editing the documentation
 
-`lang/en/docs.php` holds the documentation as a list of sections, each with a
-list of blocks. The table of contents, the anchors and the footer links are
-generated from it, so adding a section is a single array entry.
+There are two documentation pages, and they share one renderer. `lang/en/docs.php`
+is the installation guide and stays deliberately short: getting the container
+running, and nothing else. `lang/en/guide.php` is everything that happens
+afterwards, so that is where a new setting or feature is usually described.
+
+Both hold a list of sections, each with a list of blocks. The table of contents
+and the anchors are generated from that list, so adding a section is a single
+array entry.
 
 Block types: `p`, `h3`, `list` (with `ordered`), `code` (with `lang`), `table`
 (with `head` and `rows`), `note`, `warning`, `faq`.
+
+Ports and container names belong in examples only, flagged as such: every
+reader runs a different stack, and the install page has to work for all of them.
 
 ## Notes
 

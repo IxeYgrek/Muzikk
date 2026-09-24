@@ -36,6 +36,8 @@ from ..services import users as users_service
 from ..services.base import ServiceError
 from ..services.coverart import CoverArtClient
 from ..services.jellyfin import JellyfinClient
+from ..services.lastfm import LastfmClient
+from ..services.listenbrainz import ListenBrainzClient
 from ..services.musicbrainz import MusicBrainzClient
 from .deps import AdminUser, SessionDep
 
@@ -146,6 +148,26 @@ async def test_service(
                     message += " through the public server"
             else:
                 message += ", but text search is unavailable (Solr missing?)"
+            return TestResult(ok=True, message=message, details=details)
+
+        if service == "listenbrainz":
+            client = ListenBrainzClient(
+                _section_with_overrides(session, "listenbrainz", overrides)
+            )
+            details = await client.test_connection()
+            message = "ListenBrainz reachable"
+            if details.get("labs"):
+                message += ", similar artists available"
+            else:
+                message += ", but the Labs API did not answer: recommendations will be empty"
+            return TestResult(ok=True, message=message, details=details)
+
+        if service == "lastfm":
+            client = LastfmClient(_section_with_overrides(session, "lastfm", overrides))
+            details = await client.test_connection()
+            message = "API key accepted"
+            if not details.get("has_secret"):
+                message += ". Add the shared secret to allow scrobbling"
             return TestResult(ok=True, message=message, details=details)
 
         if service == "coverart":
@@ -463,6 +485,8 @@ async def system_info(session: SessionDep, admin: AdminUser) -> dict[str, Any]:
         "slskd": bool(all_settings["slskd"].url and all_settings["slskd"].api_key),
         "prowlarr": bool(all_settings["prowlarr"].url and all_settings["prowlarr"].api_key),
         "qbittorrent": bool(all_settings["qbittorrent"].url),
+        "listenbrainz": bool(all_settings["listenbrainz"].enabled),
+        "lastfm": bool(all_settings["lastfm"].enabled and all_settings["lastfm"].api_key),
     }
     if active_mode == mode_service.JELLYFIN:
         configured["jellyfin"] = bool(

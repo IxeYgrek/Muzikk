@@ -23,7 +23,8 @@ return [
         'overview' => 'Overview',
         'features' => 'Features',
         'screenshots' => 'Screenshots',
-        'docs' => 'Documentation',
+        'docs' => 'Install',
+        'guide' => 'User guide',
         'download' => 'Download',
     ],
 

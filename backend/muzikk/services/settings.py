@@ -66,6 +66,47 @@ class MusicBrainzSettings(Section):
     contact: str = "muzikk@localhost"
 
 
+class ListenBrainzSettings(Section):
+    """ListenBrainz asks nothing of the installation, only of the listener.
+
+    Reads are open and a listen is submitted with the listener's own token, so
+    there is no application key to register here: everything personal lives on
+    the account instead.
+    """
+
+    enabled: bool = False
+    url: str = "https://api.listenbrainz.org"
+    # Similar artists come from the Labs API, a separate host with its own
+    # deployment, which is why it is not derived from the one above.
+    labs_url: str = "https://labs.api.listenbrainz.org"
+    # Named after the model ListenBrainz trains; theirs may change over time.
+    similar_algorithm: str = "session_based_days_7500_session_300_contribution_5_threshold_10_limit_100_skip_30"
+    submit_listens: bool = True
+    recommendations: bool = True
+
+
+class LastfmSettings(Section):
+    """Last.fm needs two separate credentials, and only one of them is global.
+
+    The key and secret identify Muzikk itself: they are registered once at
+    last.fm/api/account/create by whoever runs this install. They cannot ship
+    with the image, since a secret published in a public repository gets abused
+    and then suspended for everybody. What makes a recommendation personal is
+    the listener's own username, which lives on the account.
+    """
+
+    secret_fields: ClassVar[tuple[str, ...]] = ("api_secret",)
+
+    enabled: bool = False
+    # Travels in every query string, so Last.fm does not treat it as a secret
+    # and neither does Muzikk: masking it would only hide it from its owner.
+    api_key: str = ""
+    api_secret: str = ""
+    url: str = "https://ws.audioscrobbler.com/2.0/"
+    submit_listens: bool = True
+    recommendations: bool = True
+
+
 class CoverArtSettings(Section):
     url: str = "https://coverartarchive.org"
     embed_in_files: bool = True
@@ -210,6 +251,8 @@ SECTION_MODELS: dict[str, type[Section]] = {
     "general": GeneralSettings,
     "jellyfin": JellyfinSettings,
     "musicbrainz": MusicBrainzSettings,
+    "listenbrainz": ListenBrainzSettings,
+    "lastfm": LastfmSettings,
     "coverart": CoverArtSettings,
     "slskd": SlskdSettings,
     "prowlarr": ProwlarrSettings,

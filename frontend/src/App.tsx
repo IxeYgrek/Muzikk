@@ -7,6 +7,7 @@ import { LogoMark } from './components/Logo'
 import { api } from './lib/api'
 import { useAuth } from './lib/auth'
 import type { Health } from './lib/types'
+import { AccountPage } from './pages/AccountPage'
 import { ActivityPage } from './pages/ActivityPage'
 import { AdminPage } from './pages/AdminPage'
 import { AlbumPage } from './pages/AlbumPage'
@@ -88,6 +89,7 @@ export function App() {
         <Route path="requests/:id" element={<RequestsPage />} />
         <Route path="activity" element={<ActivityPage />} />
         <Route path="watchlist" element={<WatchlistPage />} />
+        <Route path="account" element={<AccountPage />} />
         <Route
           path="metadata"
           element={

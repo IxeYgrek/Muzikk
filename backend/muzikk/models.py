@@ -127,6 +127,13 @@ class User(Base):
     primary_image_tag: Mapped[str | None] = mapped_column(String(64), nullable=True)
     # Jellyfin session token, encrypted at rest, so playback runs as this user.
     jellyfin_token: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Listening services are personal: two accounts on one install have two
+    # different tastes, so the handles and tokens hang off the user and not off
+    # the settings. Tokens are encrypted like the Jellyfin one.
+    listenbrainz_user: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    listenbrainz_token: Mapped[str | None] = mapped_column(Text, nullable=True)
+    lastfm_user: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    lastfm_session_key: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 

@@ -212,6 +212,9 @@ page_start(['class' => 'page-home']);
                 <a class="btn btn--primary btn--lg" href="<?= e(url('documentation.php')) ?>">
                     <?= icon('book') ?><span><?= t('home.cta.docs') ?></span>
                 </a>
+                <a class="btn btn--secondary btn--lg" href="<?= e(url('guide.php')) ?>">
+                    <?= icon('sliders') ?><span><?= t('home.cta.guide') ?></span>
+                </a>
                 <a class="btn btn--secondary btn--lg" href="<?= e(url('download.php')) ?>">
                     <?= icon('download') ?><span><?= t('home.cta.download') ?></span>
                 </a>

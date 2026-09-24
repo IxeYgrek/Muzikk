@@ -13,6 +13,7 @@ function nav_items(): array
         ['label' => t('common.nav.overview'), 'href' => url('index.php'), 'page' => 'index.php'],
         ['label' => t('common.nav.features'), 'href' => url('index.php') . '#features', 'page' => null],
         ['label' => t('common.nav.docs'), 'href' => url('documentation.php'), 'page' => 'documentation.php'],
+        ['label' => t('common.nav.guide'), 'href' => url('guide.php'), 'page' => 'guide.php'],
     ];
     // Download is not listed here: it is the call to action on the right of the
     // header, and having it twice only made the bar look padded out.
@@ -142,10 +143,11 @@ function page_end(): void
             <div>
                 <h2 class="site-footer__heading"><?= t('common.footer.docs') ?></h2>
                 <ul>
-                    <li><a href="<?= e(url('documentation.php')) ?>#requirements"><?= t('docs.nav.requirements') ?></a></li>
                     <li><a href="<?= e(url('documentation.php')) ?>#install"><?= t('docs.nav.install') ?></a></li>
-                    <li><a href="<?= e(url('documentation.php')) ?>#services"><?= t('docs.nav.services') ?></a></li>
-                    <li><a href="<?= e(url('documentation.php')) ?>#troubleshooting"><?= t('docs.nav.troubleshooting') ?></a></li>
+                    <li><a href="<?= e(url('documentation.php')) ?>#paths"><?= t('docs.nav.paths') ?></a></li>
+                    <li><a href="<?= e(url('guide.php')) ?>"><?= t('guide.nav.guide') ?></a></li>
+                    <li><a href="<?= e(url('guide.php')) ?>#services"><?= t('guide.nav.services') ?></a></li>
+                    <li><a href="<?= e(url('guide.php')) ?>#troubleshooting"><?= t('guide.nav.troubleshooting') ?></a></li>
                 </ul>
             </div>
             <div>

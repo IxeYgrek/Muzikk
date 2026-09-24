@@ -8,8 +8,8 @@ declare(strict_types=1);
 return [
     'title' => 'Download',
     'eyebrow' => 'Get Muzikk',
-    'lead' => 'Pull the image from Docker Hub, or clone the source and build it yourself. '
-        . 'One compose file, three volumes, and either a Jellyfin API key or a local administrator account.',
+    'lead' => 'One compose file, three volumes, and either a Jellyfin API key or a local administrator '
+        . 'account. Building from source is optional.',
 
     'image' => [
         'soonBadge' => 'Coming soon',
@@ -29,7 +29,7 @@ return [
         'readyTitle' => 'Get the source code',
         'readyText' => 'Clone the repository if you want to read the code, change it, or build the image yourself.',
         'readyButton' => 'Open the repository',
-        'docsButton' => 'Read the documentation',
+        'docsButton' => 'Installation guide',
     ],
 
     'version' => [
@@ -39,37 +39,32 @@ return [
 
     'quickstart' => [
         'title' => 'Quick start',
-        'lead' => 'The published image is enough. Clone the repository only if you want the compose file and the documentation next to it.',
+        'lead' => 'The published image is all you need. Cloning the repository is only for building it yourself.',
         'steps' => [
             [
-                'title' => 'Create the shared network',
-                'text' => 'Muzikk reaches Jellyfin (when you use it), slskd, Prowlarr and qBittorrent by container name, so '
-                    . 'they all need to sit on one external network.',
-                'code' => 'docker network create mediastack',
+                'title' => 'Share a Docker network',
+                'text' => 'Muzikk reaches Jellyfin, MusicBrainz, slskd, Prowlarr and qBittorrent by container '
+                    . 'name, so it belongs on the same network as them. Create one if you have none yet, using '
+                    . 'whatever name suits your stack.',
+                'code' => 'docker network create media',
             ],
             [
-                'title' => 'Clone and configure',
-                'text' => 'Set <code>PUID</code> and <code>PGID</code> to the owner of your music library, '
-                    . 'then give the host paths for the library and the downloads.',
-                'code' => <<<'CODE'
-git clone https://github.com/IxeYgrek/Muzikk.git muzikk
-cd muzikk
-cp .env.example .env
-$EDITOR .env
-CODE,
+                'title' => 'Write a compose file',
+                'text' => 'One file, four values to adjust: the host port, your music folder, your download '
+                    . 'folder, and the user that owns your files. The installation guide has it ready to copy.',
+                'code' => "mkdir muzikk && cd muzikk\n\$EDITOR compose.yaml",
             ],
             [
-                'title' => 'Pull and start',
-                'text' => 'Compose pulls <code>ixeygrek/muzikk</code> from Docker Hub. Add '
-                    . '<code>--build</code> only if you want to build from the source you just cloned.',
-                'code' => "docker compose pull\ndocker compose up -d",
+                'title' => 'Start it',
+                'text' => 'Compose pulls the image from Docker Hub and starts a single container.',
+                'code' => 'docker compose up -d',
             ],
             [
                 'title' => 'Finish in the browser',
-                'text' => 'Open <code>http://your-host:8383</code>. The wizard asks whether Jellyfin or '
-                    . 'Muzikk itself should own the accounts and the library. With Jellyfin, give the URL '
-                    . 'and API key, pick the music libraries, then sign in with a Jellyfin administrator. '
-                    . 'Locally, create the first administrator and point at the mounted music folder.',
+                'text' => 'Open Muzikk on the port you published. The wizard asks, once and for good, whether '
+                    . 'Jellyfin or Muzikk itself owns the accounts and the library. With Jellyfin, give the URL '
+                    . 'and an API key, then sign in with a Jellyfin administrator. Locally, create the first '
+                    . 'administrator and point at the mounted music folder.',
                 'code' => null,
             ],
         ],

@@ -433,6 +433,7 @@ async def playlist_tracks(
                 artist=(artists[0] if artists else "") or item.get("AlbumArtist") or "",
                 album=item.get("Album") or (album.name if album else ""),
                 album_id=item.get("AlbumId"),
+                artist_mbid=album.artist_mbid if album else None,
                 track=item.get("IndexNumber"),
                 disc=item.get("ParentIndexNumber"),
                 duration=round(ticks / 10_000_000, 3) if ticks else None,
@@ -473,19 +474,35 @@ async def create_playlist(
 async def add_items(
     playlist_id: str, payload: PlaylistAdd, session: SessionDep, user: CurrentUser
 ) -> PlaylistChange:
+    """Add tracks, leaving behind the ones the playlist already holds.
+
+    Jellyfin happily stores the same track twice, so the current contents are
+    read first and the repeats are reported rather than filed again.
+    """
     client = _client(session)
     token = _token(user)
     try:
         ids = await _resolve_tracks(client, payload)
         if not ids:
             raise HTTPException(status_code=400, detail="Nothing to add")
-        await client.add_to_playlist(
-            playlist_id, ids, token=token, user_id=user.jellyfin_user_id
+        current = await client.get_playlist_items(
+            playlist_id, token=token, user_id=user.jellyfin_user_id
         )
+        held = {item.get("Id") for item in current if item.get("Id")}
+        fresh = [item for item in ids if item not in held]
+        if fresh:
+            await client.add_to_playlist(
+                playlist_id, fresh, token=token, user_id=user.jellyfin_user_id
+            )
     except ServiceError as exc:
         raise _fail(exc) from exc
 
-    return PlaylistChange(playlist_id=playlist_id, name="", added=len(ids))
+    return PlaylistChange(
+        playlist_id=playlist_id,
+        name="",
+        added=len(fresh),
+        skipped=len(ids) - len(fresh),
+    )
 
 
 @router.delete("/{playlist_id}/items", status_code=status.HTTP_204_NO_CONTENT)

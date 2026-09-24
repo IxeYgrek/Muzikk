@@ -108,6 +108,44 @@ class SearchResponse(BaseModel):
     items: list[AlbumCard]
 
 
+class RecommendationResponse(BaseModel):
+    items: list[AlbumCard] = Field(default_factory=list)
+    # Artists worth a listen, from the same pass that found the albums.
+    artists: list["ArtistOut"] = Field(default_factory=list)
+    # Which services the taste was read from: "listenbrainz", "lastfm", or
+    # "library" when nothing is connected and the shelves had to stand in.
+    sources: list[str] = Field(default_factory=list)
+    # The artists the albums were drawn from, shown so the listener can see why
+    # something is being proposed.
+    seeds: list[str] = Field(default_factory=list)
+
+
+class ListeningAccounts(BaseModel):
+    """What the signed-in listener connected, never the tokens themselves."""
+
+    listenbrainz_enabled: bool = False
+    listenbrainz_user: str | None = None
+    listenbrainz_connected: bool = False
+    lastfm_enabled: bool = False
+    lastfm_user: str | None = None
+    lastfm_connected: bool = False
+    # False while the administrator has not registered a Last.fm application,
+    # which is what the scrobbling approval flow needs.
+    lastfm_can_authorize: bool = False
+
+
+class ListeningAccountsUpdate(BaseModel):
+    listenbrainz_user: str | None = None
+    # Sent once, stored encrypted, never returned.
+    listenbrainz_token: str | None = None
+    lastfm_user: str | None = None
+
+
+class LastfmAuthStart(BaseModel):
+    token: str
+    url: str
+
+
 class TrackOut(BaseModel):
     position: int
     disc: int
@@ -638,6 +676,8 @@ class PlayableTrack(BaseModel):
     artist: str = ""
     album: str = ""
     album_id: str | None = None
+    # Lets the player link to the artist page rather than to a name search.
+    artist_mbid: str | None = None
     track: int | None = None
     disc: int | None = None
     duration: float | None = None
@@ -708,6 +748,8 @@ class PlaylistChange(BaseModel):
     playlist_id: str
     name: str
     added: int = 0
+    # Tracks the playlist already held, which were left alone.
+    skipped: int = 0
 
 
 class PlaylistBackupTrack(BaseModel):

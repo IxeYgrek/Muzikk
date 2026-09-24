@@ -29,6 +29,7 @@ from ..models import Request as AlbumRequest
 from ..schemas import PlayableTrack
 from ..services import catalog, clients, local_library, localmedia, previews
 from ..services import mode as mode_service
+from ..services import scrobble as scrobble_service
 from ..services import settings as settings_service
 from ..services import transcode as transcode_service
 from ..services import users as users_service
@@ -95,6 +96,7 @@ def _to_playable(item: dict[str, Any], album: LibraryAlbum | None) -> PlayableTr
         artist=(artists[0] if artists else "") or item.get("AlbumArtist") or "",
         album=item.get("Album") or (album.name if album else ""),
         album_id=album_id,
+        artist_mbid=album.artist_mbid if album else None,
         track=item.get("IndexNumber"),
         disc=item.get("ParentIndexNumber"),
         duration=round(ticks / 10_000_000, 3) if ticks else None,
@@ -127,6 +129,7 @@ def _local_playable(session: Session, row: LibraryTrack, album: LibraryAlbum | N
         artist=row.artist or (album.album_artist if album else ""),
         album=row.album or (album.name if album else ""),
         album_id=row.album_item_id,
+        artist_mbid=album.artist_mbid if album else None,
         track=row.track,
         disc=row.disc,
         duration=row.duration,
@@ -582,6 +585,67 @@ async def stream_preview(
     )
 
 
+async def _listen_for(session: Session, item_id: str) -> scrobble_service.Listen | None:
+    """Describe a track well enough to scrobble it.
+
+    Resolved from whichever index this install has, and only on the stages that
+    need it: doing it on every progress tick would query Jellyfin once every few
+    seconds for a name that has not changed.
+    """
+    if mode_service.is_local(session):
+        row = local_library.find_track(session, item_id)
+        if row is None:
+            return None
+        album = (
+            session.execute(
+                select(LibraryAlbum).where(LibraryAlbum.jellyfin_id == row.album_item_id)
+            )
+            .scalars()
+            .first()
+        )
+        return scrobble_service.Listen(
+            artist=row.artist or (album.album_artist if album else ""),
+            title=row.title,
+            album=row.album or (album.name if album else ""),
+            duration=row.duration,
+            recording_mbid=row.recording_mbid,
+            release_mbid=album.release_mbid if album else None,
+            artist_mbid=album.artist_mbid if album else None,
+        )
+
+    client = clients.jellyfin(session)
+    if not client.configured:
+        return None
+    try:
+        item = await client.get_item(item_id)
+    except ServiceError:
+        return None
+    if not item:
+        return None
+
+    album_id = item.get("AlbumId")
+    album = (
+        session.execute(select(LibraryAlbum).where(LibraryAlbum.jellyfin_id == album_id))
+        .scalars()
+        .first()
+        if album_id
+        else None
+    )
+    artists = item.get("Artists") or []
+    ticks = item.get("RunTimeTicks") or 0
+    providers = item.get("ProviderIds") or {}
+    return scrobble_service.Listen(
+        artist=(artists[0] if artists else "") or item.get("AlbumArtist") or "",
+        title=item.get("Name") or "",
+        album=item.get("Album") or (album.name if album else ""),
+        duration=round(ticks / 10_000_000, 3) if ticks else None,
+        recording_mbid=(providers.get("MusicBrainzTrack") or providers.get("MusicBrainzRecording") or "").lower()
+        or None,
+        release_mbid=album.release_mbid if album else None,
+        artist_mbid=album.artist_mbid if album else None,
+    )
+
+
 @router.post("/report")
 async def report(
     session: SessionDep,
@@ -590,32 +654,42 @@ async def report(
     stage: str = Query(pattern="^(start|progress|stop)$"),
     position_ms: int = Query(default=0, ge=0),
     paused: bool = Query(default=False),
-) -> dict[str, bool]:
-    """Mirror the playback state into Jellyfin so it counts as listened."""
+) -> dict[str, Any]:
+    """Mirror the playback state into Jellyfin, and scrobble the listen.
+
+    The two are independent. Jellyfin only hears about a play when this install
+    runs on it; the listening services hear about it in either mode, because
+    they belong to the listener rather than to the library.
+    """
     config = _require_enabled(session)
-    if not config.report_playback:
-        return {"reported": False}
-    if mode_service.is_local(session):
-        # There is no other server to tell; the play stays between the
-        # listener and their browser.
-        return {"reported": False}
+    result: dict[str, Any] = {"reported": False, "listenbrainz": False, "lastfm": False}
 
-    token = users_service.jellyfin_token(user)
-    if not token:
+    if config.report_playback and not mode_service.is_local(session):
+        token = users_service.jellyfin_token(user)
         # Reporting under the server API key would credit the wrong account.
-        return {"reported": False}
+        if token:
+            payload = {
+                "ItemId": item_id,
+                "PositionTicks": position_ms * TICKS_PER_MS,
+                "PlayMethod": "DirectStream",
+                "IsPaused": paused,
+                "CanSeek": True,
+            }
+            try:
+                await _client(session).report_playback(stage, payload, token=token)
+                result["reported"] = True
+            except ServiceError as exc:
+                logger.debug("Playback reporting failed: %s", exc.message)
 
-    client = _client(session)
-    payload = {
-        "ItemId": item_id,
-        "PositionTicks": position_ms * TICKS_PER_MS,
-        "PlayMethod": "DirectStream",
-        "IsPaused": paused,
-        "CanSeek": True,
-    }
-    try:
-        await client.report_playback(stage, payload, token=token)
-    except ServiceError as exc:
-        logger.debug("Playback reporting failed: %s", exc.message)
-        return {"reported": False}
-    return {"reported": True}
+    if stage == "progress" or not (user.listenbrainz_token or user.lastfm_session_key):
+        return result
+
+    listen = await _listen_for(session, item_id)
+    if listen is None:
+        return result
+
+    if stage == "start":
+        result.update(await scrobble_service.announce(session, user, listen))
+    else:
+        result.update(await scrobble_service.submit(session, user, listen, position_ms=position_ms))
+    return result

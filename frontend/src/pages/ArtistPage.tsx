@@ -1,11 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Star, UserRound } from 'lucide-react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams } from 'react-router-dom'
 
 import { AlbumGrid, AlbumGridSkeleton } from '../components/AlbumCard'
 import { useToast } from '../components/Toast'
-import { Button, Card, Chip } from '../components/ui'
+import { Button, Card, Chip, Tabs } from '../components/ui'
 import { ApiError, api } from '../lib/api'
 import { useAlbumRequest } from '../lib/hooks'
 import type { ArtistDetail, WatchedArtist } from '../lib/types'
@@ -31,6 +32,11 @@ export function ArtistPage() {
 
   const artist = artistQuery.data?.artist
   const watched = watchlistQuery.data?.find((row) => row.artist_mbid === mbid)
+  const [kind, setKind] = useState('')
+  const discography = artistQuery.data?.release_groups ?? []
+  const shown = kind
+    ? discography.filter((album) => (album.primary_type ?? '').toLowerCase() === kind)
+    : discography
 
   const toggleFollow = useMutation({
     mutationFn: async () => {
@@ -88,11 +94,22 @@ export function ArtistPage() {
         </Button>
       </Card>
 
+      <Tabs
+        active={kind}
+        onChange={setKind}
+        tabs={[
+          { id: '', label: t('home.typeAll') },
+          { id: 'album', label: t('home.typeAlbum') },
+          { id: 'ep', label: t('home.typeEp') },
+          { id: 'single', label: t('home.typeSingle') },
+        ]}
+      />
+
       {artistQuery.isLoading ? (
         <AlbumGridSkeleton />
       ) : (
         <AlbumGrid
-          albums={artistQuery.data?.release_groups ?? []}
+          albums={shown}
           onRequest={(album, isUpgrade) => request(album, isUpgrade)}
           pendingId={pendingId}
           emptyTitle={t('home.noResults')}
