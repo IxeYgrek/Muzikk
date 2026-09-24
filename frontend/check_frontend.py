@@ -87,7 +87,11 @@ used_pattern = re.compile(r"""\bt\(\s*['"]([a-zA-Z0-9_.]+)['"]""")
 # suffix is only known at runtime, so the namespace is what can be checked.
 template_pattern = re.compile(r"""\bt\(\s*`([a-zA-Z0-9_.]+)\.\$\{""")
 
-for file in sorted(SRC.rglob("*.tsx")):
+# Both extensions: hooks.ts translates its own toasts, so scanning components
+# alone left a whole file able to ship a key that does not exist.
+for file in sorted(SRC.rglob("*.ts*")):
+    if file.parent.name == "i18n":
+        continue
     contents = file.read_text(encoding="utf-8")
     for key in used_pattern.findall(contents):
         if key in fr_keys:
@@ -115,8 +119,13 @@ for file in sorted(SRC.rglob("*.tsx")):
         problems.append(f"raw <img> in {file.relative_to(ROOT)}, use AlbumCover instead")
 
 # Every admin form field must have a label in fr.ts, they are looked up by key.
+#
+# The slice stops at the closing brace of the object itself, in the first
+# column: reading further swept up the field lists declared after it and blamed
+# them on whichever section came last, which buried the real misses in four
+# invented ones.
 form = (SRC / "components" / "admin" / "SettingsForm.tsx").read_text(encoding="utf-8")
-schema = form.split("export const SECTION_FIELDS", 1)[1].split("\ntype Values", 1)[0]
+schema = form.split("export const SECTION_FIELDS", 1)[1].split("\n}\n", 1)[0]
 section = ""
 for line in schema.splitlines():
     header = re.match(r"^  ([a-z_]+): \[", line)

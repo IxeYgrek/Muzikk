@@ -4,6 +4,7 @@ export const fr = {
     tagline: 'Vos albums, en lossless, sans effort',
     search: 'Rechercher',
     cancel: 'Annuler',
+    confirm: 'Confirmer',
     save: 'Enregistrer',
     saving: 'Enregistrement…',
     saved: 'Enregistré',

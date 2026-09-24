@@ -6,6 +6,7 @@ export const en: Translation = {
     tagline: 'Your albums, lossless, effortlessly',
     search: 'Search',
     cancel: 'Cancel',
+    confirm: 'Confirm',
     save: 'Save',
     saving: 'Saving…',
     saved: 'Saved',
