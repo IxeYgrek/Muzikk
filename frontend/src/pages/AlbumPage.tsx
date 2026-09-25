@@ -25,7 +25,7 @@ import { StatusBadge } from '../components/StatusBadge'
 import { useToast } from '../components/Toast'
 import { Alert, Button, Card, CenteredSpinner, Chip, EmptyState, Spinner } from '../components/ui'
 import { ApiError, api } from '../lib/api'
-import { canRequestUpgrade, useAuth } from '../lib/auth'
+import { canRequestTrack, canRequestUpgrade, useAuth } from '../lib/auth'
 import { formatDuration } from '../lib/format'
 import { useAlbumRequest, useLocalMode, usePreview } from '../lib/hooks'
 import { usePlayer } from '../lib/player'
@@ -45,7 +45,7 @@ export function AlbumPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { notify } = useToast()
-  const { request, pendingId } = useAlbumRequest()
+  const { request, requestTrack, pendingId } = useAlbumRequest()
   const { playPreview, previewLoading } = usePreview()
   const player = usePlayer()
   const localMode = useLocalMode()
@@ -155,6 +155,7 @@ export function AlbumPage() {
   const owned = album.ownership.status === 'owned'
   const probable = album.ownership.status === 'probable'
   const upgradable = album.ownership.upgradable && canRequestUpgrade(user)
+  const trackDownloads = canRequestTrack(user)
   const busy = Boolean(album.request_status) && album.request_status !== 'failed'
   const selected = album.selected_release
   const discs = [...new Set(album.tracks.map((track) => track.disc))].sort((a, b) => a - b)
@@ -285,7 +286,7 @@ export function AlbumPage() {
 
             <p className="hint flex items-start gap-1.5 pt-1">
               <Info className="mt-0.5 size-3.5 shrink-0" />
-              {t('album.albumOnly')}
+              {t(trackDownloads ? 'album.albumOnlyTrack' : 'album.albumOnly')}
             </p>
             <MusicBrainzLinks
               groupMbid={album.release_group_mbid}
@@ -447,28 +448,57 @@ export function AlbumPage() {
                             <span className="shrink-0 tabular-nums text-xs text-ink-400">
                               {formatDuration(track.length_ms)}
                             </span>
-                            {/* Kept the same width whether the button is there
+                            {/* Kept the same width whether the buttons are there
                                 or not, so the durations stay aligned. */}
-                            <span className="grid size-7 shrink-0 place-items-center">
-                              {owned && !localMode && playable[target].jellyfin_id && (
-                                <button
-                                  type="button"
-                                  onClick={(event) => {
-                                    event.stopPropagation()
-                                    setPlaylistTarget({
-                                      label: [track.artist || album.artist, track.title]
-                                        .filter(Boolean)
-                                        .join(' — '),
-                                      trackIds: [playable[target].jellyfin_id],
-                                    })
-                                  }}
-                                  title={t('playlists.addTo')}
-                                  aria-label={t('playlists.addTo')}
-                                  className="rounded-lg p-1.5 text-ink-400 opacity-0 transition-opacity hover:bg-ink-700/60 hover:text-ink-100 focus-visible:opacity-100 group-hover:opacity-100"
-                                >
-                                  <ListPlus className="size-3.5" />
-                                </button>
-                              )}
+                            <span className="flex shrink-0 items-center gap-0.5">
+                              <span className="grid size-7 place-items-center">
+                                {owned && !localMode && playable[target].jellyfin_id && (
+                                  <button
+                                    type="button"
+                                    onClick={(event) => {
+                                      event.stopPropagation()
+                                      setPlaylistTarget({
+                                        label: [track.artist || album.artist, track.title]
+                                          .filter(Boolean)
+                                          .join(' — '),
+                                        trackIds: [playable[target].jellyfin_id],
+                                      })
+                                    }}
+                                    title={t('playlists.addTo')}
+                                    aria-label={t('playlists.addTo')}
+                                    className="rounded-lg p-1.5 text-ink-400 opacity-0 transition-opacity hover:bg-ink-700/60 hover:text-ink-100 focus-visible:opacity-100 group-hover:opacity-100"
+                                  >
+                                    <ListPlus className="size-3.5" />
+                                  </button>
+                                )}
+                              </span>
+                              {/* Only a track nobody owns is worth fetching, and
+                                  only for an account granted it. */}
+                              <span className="grid size-7 place-items-center">
+                                {!owned && trackDownloads && track.recording_mbid && (
+                                  <button
+                                    type="button"
+                                    onClick={(event) => {
+                                      event.stopPropagation()
+                                      requestTrack(
+                                        track.recording_mbid!,
+                                        album.release_group_mbid,
+                                        selected?.release_mbid,
+                                      )
+                                    }}
+                                    disabled={busy || pendingId === track.recording_mbid}
+                                    title={t('album.requestTrack')}
+                                    aria-label={t('album.requestTrack')}
+                                    className="rounded-lg p-1.5 text-ink-400 opacity-0 transition-opacity hover:bg-ink-700/60 hover:text-brand-200 focus-visible:opacity-100 group-hover:opacity-100 disabled:opacity-40"
+                                  >
+                                    {pendingId === track.recording_mbid ? (
+                                      <Spinner className="size-3.5" />
+                                    ) : (
+                                      <Download className="size-3.5" />
+                                    )}
+                                  </button>
+                                )}
+                              </span>
                             </span>
                           </div>
                         )

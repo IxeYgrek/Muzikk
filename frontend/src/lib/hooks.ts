@@ -121,6 +121,8 @@ type RequestInput = {
   release_group_mbid: string
   release_mbid?: string | null
   is_upgrade?: boolean
+  /** Set to ask for one track rather than the album holding it. */
+  recording_mbid?: string | null
 }
 
 type CardPatch = { release_group_mbid: string; request_status: string; request_id: number }
@@ -210,5 +212,21 @@ export function useAlbumRequest() {
     [mutation],
   )
 
-  return { request, requestByMbid, pendingId, isPending: mutation.isPending }
+  /**
+   * One track instead of the album. The album still travels with it: that is
+   * where the file gets filed, and the server needs it to tag the download.
+   */
+  const requestTrack = useCallback(
+    (recordingMbid: string, releaseGroupMbid: string, releaseMbid?: string | null) => {
+      setPendingId(recordingMbid)
+      mutation.mutate({
+        release_group_mbid: releaseGroupMbid,
+        release_mbid: releaseMbid ?? null,
+        recording_mbid: recordingMbid,
+      })
+    },
+    [mutation],
+  )
+
+  return { request, requestByMbid, requestTrack, pendingId, isPending: mutation.isPending }
 }

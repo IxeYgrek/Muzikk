@@ -20,7 +20,16 @@ from sqlalchemy.orm import Session
 from ..db import session_scope
 from ..matching.release_picker import pick_release
 from ..matching.scorer import MatchResult, rank_candidates, score_candidate
-from ..models import Download, DownloadAttempt, Indexer, Request, RequestEvent, RequestStatus, utcnow
+from ..models import (
+    Download,
+    DownloadAttempt,
+    Indexer,
+    Request,
+    RequestEvent,
+    RequestKind,
+    RequestStatus,
+    utcnow,
+)
 from ..providers.base import AlbumQuery, Candidate, DownloadHandle, Provider
 from ..providers.prowlarr import ProwlarrClient, TorrentProvider, group_for_privacy
 from ..providers.qbittorrent import QbittorrentClient
@@ -204,6 +213,24 @@ async def build_query(session: Session, request: Request) -> tuple[AlbumQuery, d
         track_durations_ms=durations,
         track_artists=artists,
     )
+
+    if request.kind == RequestKind.TRACK and request.recording_mbid:
+        # The wanted recording is located inside the release so its title, its
+        # length and its position all come from the same place the tags will.
+        query.recording_mbid = request.recording_mbid
+        query.track_title = request.track_title or ""
+        for medium in release.get("media") or []:
+            for entry in medium.get("tracks") or []:
+                recording = entry.get("recording") or {}
+                if recording.get("id") != request.recording_mbid:
+                    continue
+                query.track_title = entry.get("title") or recording.get("title") or query.track_title
+                query.track_position = entry.get("position")
+                length = entry.get("length") or recording.get("length")
+                query.track_duration_ms = int(length) if length else None
+        if not query.track_title:
+            raise ServiceError("musicbrainz", "this release does not carry the requested track")
+
     return query, release
 
 
@@ -471,6 +498,11 @@ class Orchestrator:
         quality,
     ) -> bool:
         """Import the album if a complete copy is already in the download folder."""
+        if query.is_track:
+            # Salvage looks for a complete record; one track is a different
+            # question, and asking it here would only walk the folder for nothing.
+            return False
+
         with session_scope() as session:
             slskd_settings = settings_service.load(session, "slskd")
 
@@ -803,6 +835,7 @@ class Orchestrator:
                 is_upgrade=is_upgrade,
                 replaces_path=replaces_path,
                 confirm_replace=is_upgrade and naming.confirm_upgrade_replace,
+                only_recording_mbid=query.recording_mbid if query.is_track else None,
             )
         )
 

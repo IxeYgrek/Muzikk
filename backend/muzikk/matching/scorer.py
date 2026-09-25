@@ -46,6 +46,17 @@ MIN_ARTIST_SIMILARITY = 0.55
 MIN_ALBUM_SIMILARITY = 0.55
 MIN_ALBUM_SIMILARITY_SINGLE = 0.72
 MIN_TITLE_COVERAGE = 0.4
+
+# Weights for a single track, where there is no tracklist to compare and the
+# file name carries nearly everything.
+WEIGHT_TRACK_TITLE = 45.0
+WEIGHT_TRACK_DURATION = 25.0
+
+# A file name has to really be this track. Peers name files after the record
+# they sit in, so a loose threshold hands back a neighbouring track.
+MIN_TRACK_TITLE_SIMILARITY = 0.82
+# Same recording, different rip: a few seconds apart at most.
+TRACK_DURATION_TOLERANCE = 8.0
 MB_PER_BYTE = 1 / (1024 * 1024)
 
 LOSSLESS_TOKENS = ("flac", "lossless", "alac", "ape", "wavpack", "wv", "aiff", "24bit", "24 bit", "hi-res")
@@ -193,9 +204,108 @@ def _size_sanity(candidate: Candidate, query: AlbumQuery, quality: QualitySettin
     return None
 
 
+def _score_track(
+    candidate: Candidate, query: AlbumQuery, quality: QualitySettings
+) -> MatchResult:
+    """Judge a candidate for one track rather than for a record.
+
+    A separate path on purpose. The album rules that reject a lone file — a two
+    file minimum, a track count that has to match, a tracklist that has to be
+    covered — are what stop an isolated track being mistaken for the album it
+    came from. Relaxing them would bring that back; asking different questions
+    does not.
+
+    The questions here are: is this the right title, is it by the right artist,
+    is it long enough to be the recording rather than an intro, and is it the
+    format asked for.
+    """
+    details: dict[str, Any] = {"track": query.track_title}
+
+    audio = candidate.audio_files
+    if not audio:
+        return MatchResult(reason="no audio file in the candidate", details=details)
+    if len(audio) != 1:
+        return MatchResult(
+            reason=f"a track request takes one file, not {len(audio)}", details=details
+        )
+    item = audio[0]
+
+    acceptable, is_lossless, format_bonus, format_reason = _format_assessment(candidate, quality)
+    details["format"] = format_reason
+    details["lossless"] = is_lossless
+    if not acceptable:
+        return MatchResult(reason=format_reason, details=details)
+
+    name = Path(item.filename.replace("\\", "/")).name
+    stems = [normalize_title(name), normalize_title(strip_track_number(name))]
+    title = query.normalized_track
+    title_score = max((fuzz.token_set_ratio(title, stem) for stem in stems), default=0) / 100.0
+    details["title_similarity"] = round(title_score * 100, 1)
+    if title_score < MIN_TRACK_TITLE_SIMILARITY:
+        return MatchResult(
+            reason=f"the file is not this track ({details['title_similarity']}% match)",
+            details=details,
+        )
+
+    artist_similarity = _artist_similarity(candidate, query)
+    details["artist_similarity"] = round(artist_similarity * 100, 1)
+    if (
+        quality.require_artist_match
+        and query.normalized_artist
+        and not query.is_various
+        and artist_similarity < MIN_ARTIST_SIMILARITY
+    ):
+        return MatchResult(
+            reason=f"artist not in the path ({details['artist_similarity']}% match)",
+            details=details,
+        )
+
+    # Duration is the strongest signal a single file offers: a remix, a live
+    # take or a radio edit shares the title and rarely the length.
+    duration_score = 0.5
+    wanted = (query.track_duration_ms or 0) / 1000
+    if wanted and item.length_seconds:
+        drift = abs(item.length_seconds - wanted)
+        details["duration_drift_seconds"] = round(drift, 1)
+        if drift <= TRACK_DURATION_TOLERANCE:
+            duration_score = 1.0
+        elif drift <= TRACK_DURATION_TOLERANCE * 4:
+            duration_score = 0.6
+        else:
+            return MatchResult(
+                reason=f"length differs by {round(drift)}s, this is another version",
+                details=details,
+            )
+
+    score = (
+        WEIGHT_TRACK_TITLE * title_score
+        + WEIGHT_ARTIST * artist_similarity
+        + WEIGHT_TRACK_DURATION * duration_score
+        + WEIGHT_FORMAT * format_bonus
+    )
+    if candidate.extra.get("has_free_upload_slot"):
+        score += 3
+    if candidate.queue_length is not None and candidate.queue_length == 0:
+        score += 2
+    if candidate.upload_speed:
+        score += min(3.0, candidate.upload_speed / 500_000)
+
+    score = round(max(0.0, min(score, 120.0)), 2)
+    accepted = score >= quality.min_score
+    return MatchResult(
+        score=score,
+        accepted=accepted,
+        reason="" if accepted else f"score {score} below the {quality.min_score} threshold",
+        details=details,
+    )
+
+
 def score_candidate(
     candidate: Candidate, query: AlbumQuery, quality: QualitySettings
 ) -> MatchResult:
+    if query.is_track:
+        return _score_track(candidate, query, quality)
+
     details: dict[str, Any] = {}
 
     audio_files = candidate.audio_files

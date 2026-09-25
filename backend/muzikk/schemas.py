@@ -29,6 +29,7 @@ class UserOut(ORMModel):
     is_admin: bool
     is_enabled: bool
     can_request: bool
+    can_request_track: bool = False
     can_upgrade: bool
     can_import: bool
     auto_approve: bool | None
@@ -47,6 +48,7 @@ class SessionOut(BaseModel):
 class UserUpdate(BaseModel):
     is_enabled: bool | None = None
     can_request: bool | None = None
+    can_request_track: bool | None = None
     can_upgrade: bool | None = None
     can_import: bool | None = None
     auto_approve: bool | None = None
@@ -291,6 +293,9 @@ class RequestCreate(BaseModel):
     release_group_mbid: str
     release_mbid: str | None = None
     is_upgrade: bool = False
+    # Set to ask for one track instead of the album. The album still decides
+    # where the file is filed, so it stays required.
+    recording_mbid: str | None = None
 
 
 class RequestEventOut(ORMModel):
@@ -342,6 +347,10 @@ class RequestOut(ORMModel):
     track_count: int | None
     status: str
     is_upgrade: bool
+    # "album" or "track". A track request names the recording it wants.
+    kind: str = "album"
+    recording_mbid: str | None = None
+    track_title: str | None = None
     progress: float
     provider_key: str | None
     provider_label: str | None

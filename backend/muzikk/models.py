@@ -115,6 +115,9 @@ class User(Base):
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     can_request: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Ask for one track rather than the album holding it. Off by default: a
+    # library filled a track at a time is a library of partial albums.
+    can_request_track: Mapped[bool] = mapped_column(Boolean, default=False)
     # Replace an owned lossy album with a lossless download (MP3 to FLAC).
     can_upgrade: Mapped[bool] = mapped_column(Boolean, default=False)
     # Drop an album folder onto the home page and tag it into the library.
@@ -142,6 +145,19 @@ class User(Base):
     )
 
 
+class RequestKind:
+    """Whether a request asks for a whole album or for one track of it.
+
+    A track request still names its release group: the file has to be tagged and
+    filed as part of the record it belongs to, otherwise it lands in the library
+    as an orphan nothing can match.
+    """
+
+    ALBUM = "album"
+    TRACK = "track"
+    ALL = (ALBUM, TRACK)
+
+
 class Request(Base):
     __tablename__ = "request"
 
@@ -156,6 +172,12 @@ class Request(Base):
     primary_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
     year: Mapped[int | None] = mapped_column(Integer, nullable=True)
     track_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    kind: Mapped[str] = mapped_column(String(16), default=RequestKind.ALBUM, index=True)
+    # Set on a track request: which recording of the album is wanted. It is what
+    # the file gets paired with at import, so the right track number is written.
+    recording_mbid: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    track_title: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
     status: Mapped[str] = mapped_column(String(32), default=RequestStatus.PENDING, index=True)
     is_upgrade: Mapped[bool] = mapped_column(Boolean, default=False)

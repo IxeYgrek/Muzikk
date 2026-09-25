@@ -279,6 +279,17 @@ class MusicBrainzClient(HttpService):
             },
         )
 
+    async def get_recording(self, mbid: str) -> dict[str, Any]:
+        """One track, with the releases carrying it.
+
+        A track request is filed inside an album, so the releases are what make
+        this useful: they say which record the file belongs to.
+        """
+        return await self._get(
+            f"/ws/2/recording/{mbid}",
+            {"inc": "artist-credits+releases+release-groups+media"},
+        )
+
     async def get_label(self, mbid: str) -> dict[str, Any]:
         return await self._get(f"/ws/2/label/{mbid}", {"inc": "tags+genres+url-rels"})
 

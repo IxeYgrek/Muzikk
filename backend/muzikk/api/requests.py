@@ -57,6 +57,7 @@ async def create(payload: RequestCreate, session: SessionDep, user: CurrentUser)
             payload.release_group_mbid,
             release_mbid=payload.release_mbid,
             is_upgrade=payload.is_upgrade,
+            recording_mbid=payload.recording_mbid,
         )
     except requests_service.RequestError as exc:
         code = status.HTTP_400_BAD_REQUEST

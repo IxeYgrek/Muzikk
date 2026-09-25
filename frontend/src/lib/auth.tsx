@@ -80,6 +80,10 @@ export function canRequestUpgrade(user: User | null | undefined): boolean {
   return Boolean(user?.is_admin || user?.can_upgrade)
 }
 
+export function canRequestTrack(user: User | null | undefined): boolean {
+  return Boolean(user?.is_admin || user?.can_request_track)
+}
+
 export function useAuth(): AuthContextValue {
   const context = useContext(AuthContext)
   if (!context) throw new Error('useAuth must be used inside an AuthProvider')

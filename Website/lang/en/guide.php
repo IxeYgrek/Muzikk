@@ -151,8 +151,7 @@ return [
             'id' => 'requests',
             'title' => 'Requesting an album',
             'blocks' => [
-                ['type' => 'p', 'text' => 'Search, open an album, press the button. Requests always cover a whole '
-                    . 'album, never a single track. What happens next:'],
+                ['type' => 'p', 'text' => 'Search, open an album, press the button. What happens next:'],
                 ['type' => 'code', 'lang' => 'text', 'body' => <<<'CODE'
 request → (approval) → search → candidate chosen → download
         → verification → tagging → filing → library index
@@ -165,6 +164,18 @@ CODE],
                     . 'evaluated is kept with its score and the reason it was rejected, readable from the '
                     . '<strong>Requests</strong> page. That page is also where you clear imported or failed '
                     . 'requests, retry every failure at once, or cancel what is running.'],
+                ['type' => 'h3', 'text' => 'Asking for one track'],
+                ['type' => 'p', 'text' => 'A request normally covers the whole album. An account granted '
+                    . '<em>Request single tracks</em> — off by default — also gets a download button on '
+                    . 'each line of a tracklist. The file is still tagged and filed inside the album it '
+                    . 'belongs to, so it can later be completed rather than sitting in the library as an '
+                    . 'orphan; the album simply appears incomplete until then.'],
+                ['type' => 'note', 'text' => 'Soulseek only, because it is the one place files are shared '
+                    . 'individually. A track is matched on its own title, its artist and its '
+                    . '<strong>length</strong> — a remix or a live take shares the title and rarely the '
+                    . 'duration, which is what keeps another version out. The album rules are untouched: '
+                    . 'a lone file is still never accepted as a record.'],
+
                 ['type' => 'h3', 'text' => 'Upgrading an album you already own'],
                 ['type' => 'p', 'text' => 'An upgrade replaces a lossy copy with a lossless one, and lands in the '
                     . 'very folder it improves. Rather than deleting anything, Muzikk records both versions file by '
@@ -271,7 +282,8 @@ CODE],
             'title' => 'Users and permissions',
             'blocks' => [
                 ['type' => 'p', 'text' => 'Each account is granted, independently: <em>account active</em>, '
-                    . '<em>request albums</em>, <em>upgrade to lossless</em> and <em>import a folder</em>. '
+                    . '<em>request albums</em>, <em>request single tracks</em>, <em>upgrade to lossless</em> '
+                    . 'and <em>import a folder</em>. '
                     . '<em>Automatic approval</em> is a three-way choice — follow the global setting, always, or '
                     . 'never — and the weekly quota is a number, zero meaning unlimited. Administrators bypass both '
                     . 'permissions and quotas.'],

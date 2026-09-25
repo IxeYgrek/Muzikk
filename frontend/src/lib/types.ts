@@ -145,6 +145,8 @@ export type User = {
   is_admin: boolean
   is_enabled: boolean
   can_request: boolean
+  /** Ask for one track rather than the album holding it. Off by default. */
+  can_request_track: boolean
   can_upgrade: boolean
   can_import: boolean
   auto_approve: boolean | null

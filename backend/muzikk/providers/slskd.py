@@ -56,7 +56,12 @@ def _minimum_files(query: AlbumQuery) -> int:
     Two, normally: a lone track that happens to carry the album name is noise,
     not the album. But a single is one file, and asking two of it means never
     finding one — the release is then dropped before it can even be scored.
+
+    A track request is the other case entirely: one file is exactly what it
+    wants, and it may well sit in a folder holding a whole record.
     """
+    if query.is_track:
+        return 1
     return 1 if 0 < query.track_count < 2 else 2
 
 
@@ -169,6 +174,49 @@ class SlskdProvider(Provider):
                     username = response.get("username")
                     if not username:
                         continue
+
+                    if query.is_track:
+                        # One candidate per file, not per folder: the folder may
+                        # hold a whole record and only one file is wanted.
+                        for entry in response.get("files") or []:
+                            filename = entry.get("filename") or ""
+                            if not filename or not is_audio_file(filename):
+                                continue
+                            marker = (username, filename)
+                            if marker in seen_directories:
+                                continue
+                            seen_directories.add(marker)
+                            item = CandidateFile(
+                                filename=filename,
+                                size=int(entry.get("size") or 0),
+                                length_seconds=entry.get("length"),
+                                bitrate=entry.get("bitRate"),
+                                bit_depth=entry.get("bitDepth"),
+                                sample_rate=entry.get("sampleRate"),
+                            )
+                            candidates.append(
+                                Candidate(
+                                    provider_key=self.key,
+                                    provider_label=self.label,
+                                    kind=self.kind,
+                                    title=basename(filename) or filename,
+                                    directory=_remote_dir(filename),
+                                    username=username,
+                                    size=item.size,
+                                    files=[item],
+                                    files_inspected=True,
+                                    upload_speed=response.get("uploadSpeed"),
+                                    queue_length=response.get("queueLength"),
+                                    extra={
+                                        "has_free_upload_slot": response.get("hasFreeUploadSlot"),
+                                        "search_term": term,
+                                    },
+                                )
+                            )
+                            if len(candidates) >= MAX_SEARCH_CANDIDATES:
+                                return candidates
+                        continue
+
                     grouped: dict[str, list[dict[str, Any]]] = {}
                     for entry in response.get("files") or []:
                         filename = entry.get("filename") or ""

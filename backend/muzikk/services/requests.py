@@ -10,7 +10,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ..jobs import queue
-from ..models import Request, RequestEvent, RequestStatus, User, utcnow
+from ..models import Request, RequestEvent, RequestKind, RequestStatus, User, utcnow
 from ..pipeline import importer
 from . import clients
 from . import settings as settings_service
@@ -63,6 +63,38 @@ async def _resolve_metadata(
     }
 
 
+async def _resolve_track(
+    client: MusicBrainzClient, recording_mbid: str
+) -> dict[str, object]:
+    """The album a recording belongs to, and the title to look for.
+
+    A track request is filed inside its album, so the release group has to be
+    resolved here rather than trusted from the caller: a recording appears on
+    several releases and only one of them is the record being completed.
+    """
+    recording = await client.get_recording(recording_mbid)
+    title = recording.get("title") or ""
+    credits = recording.get("artist-credit")
+
+    group_mbid = ""
+    release_mbid = None
+    for release in recording.get("releases") or []:
+        group = release.get("release-group") or {}
+        if group.get("id"):
+            group_mbid = group["id"]
+            release_mbid = release.get("id")
+            break
+
+    return {
+        "recording_mbid": recording_mbid,
+        "track_title": title,
+        "artist_name": artist_credit_name(credits) or "Unknown Artist",
+        "artist_mbid": artist_credit_mbid(credits),
+        "release_group_mbid": group_mbid,
+        "release_mbid": release_mbid,
+    }
+
+
 async def create_request(
     session: Session,
     user: User,
@@ -70,25 +102,50 @@ async def create_request(
     *,
     release_mbid: str | None = None,
     is_upgrade: bool = False,
+    recording_mbid: str | None = None,
 ) -> Request:
+    """Create a request for a whole album, or for one track of one."""
+    wants_track = bool(recording_mbid)
+
     if is_upgrade:
         if not user.can_upgrade and not user.is_admin:
             raise RequestError(
                 "This account is not allowed to request upgrades", code="forbidden"
             )
+    elif wants_track:
+        if not user.can_request_track and not user.is_admin:
+            raise RequestError(
+                "This account is not allowed to request single tracks", code="forbidden"
+            )
     elif not user.can_request and not user.is_admin:
         raise RequestError("This account is not allowed to request albums", code="forbidden")
 
-    existing = (
-        session.execute(
-            select(Request)
-            .where(Request.release_group_mbid == release_group_mbid)
-            .where(Request.status.notin_((RequestStatus.REJECTED, RequestStatus.CANCELLED)))
-            .order_by(Request.id.desc())
-        )
-        .scalars()
-        .first()
+    client = clients.musicbrainz(session)
+    track: dict[str, object] = {}
+    if wants_track:
+        track = await _resolve_track(client, str(recording_mbid))
+        # The album the recording belongs to wins over anything the caller sent:
+        # it is where the file will be filed.
+        release_group_mbid = str(track["release_group_mbid"] or release_group_mbid)
+        release_mbid = release_mbid or (track["release_mbid"] or None)  # type: ignore[assignment]
+        if not release_group_mbid:
+            raise RequestError("MusicBrainz lists no album for this track")
+
+    # Matched on the same thing that was asked for: a track request and an album
+    # request on the same record are two different jobs, and merging them would
+    # silently answer one with the other.
+    query = (
+        select(Request)
+        .where(Request.release_group_mbid == release_group_mbid)
+        .where(Request.status.notin_((RequestStatus.REJECTED, RequestStatus.CANCELLED)))
+        .order_by(Request.id.desc())
     )
+    if wants_track:
+        query = query.where(Request.recording_mbid == recording_mbid)
+    else:
+        query = query.where(Request.kind == RequestKind.ALBUM)
+
+    existing = session.execute(query).scalars().first()
     if existing is not None:
         if existing.status == RequestStatus.IMPORTED and is_upgrade:
             pass  # an upgrade of an already imported album is a new request
@@ -104,7 +161,6 @@ async def create_request(
                 f"Weekly quota reached ({used}/{user.weekly_quota})", code="quota_exceeded"
             )
 
-    client = clients.musicbrainz(session)
     metadata = await _resolve_metadata(client, release_group_mbid)
 
     replaces_path = None
@@ -130,6 +186,9 @@ async def create_request(
         year=metadata["year"],
         is_upgrade=is_upgrade,
         replaces_path=replaces_path,
+        kind=RequestKind.TRACK if wants_track else RequestKind.ALBUM,
+        recording_mbid=str(track["recording_mbid"]) if wants_track else None,
+        track_title=str(track["track_title"]) if wants_track else None,
         status=RequestStatus.APPROVED if auto_approve else RequestStatus.PENDING,
         approved_by_id=user.id if auto_approve else None,
         approved_at=utcnow() if auto_approve else None,
@@ -138,11 +197,13 @@ async def create_request(
     session.commit()
     session.refresh(request)
 
+    what = f'track "{request.track_title}"' if wants_track else "album"
     _log(
         session,
         request.id,
         "created",
-        f"requested by {user.name}" + ("" if auto_approve else ", waiting for approval"),
+        f"{what} requested by {user.name}"
+        + ("" if auto_approve else ", waiting for approval"),
     )
     if auto_approve:
         queue.enqueue(

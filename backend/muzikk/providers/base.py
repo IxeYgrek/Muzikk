@@ -38,7 +38,14 @@ def _without_release_type(album: str) -> str:
 
 @dataclass(slots=True)
 class AlbumQuery:
-    """Everything MusicBrainz knows about the album we want."""
+    """Everything MusicBrainz knows about the album we want.
+
+    Or about one track of it: a track request carries the same album, because
+    that is where the file gets filed, plus the recording that is actually
+    wanted. Everything downstream branches on ``is_track`` rather than on a
+    loosened album rule — the rules that reject a lone file are what keep an
+    isolated track from being mistaken for a record.
+    """
 
     release_group_mbid: str
     album: str
@@ -51,6 +58,20 @@ class AlbumQuery:
     track_titles: list[str] = field(default_factory=list)
     track_durations_ms: list[int] = field(default_factory=list)
     track_artists: list[str] = field(default_factory=list)
+
+    # Set only on a track request.
+    recording_mbid: str | None = None
+    track_title: str = ""
+    track_position: int | None = None
+    track_duration_ms: int | None = None
+
+    @property
+    def is_track(self) -> bool:
+        return bool(self.recording_mbid and self.track_title)
+
+    @property
+    def normalized_track(self) -> str:
+        return normalize_title(self.track_title)
 
     @property
     def is_various(self) -> bool:
@@ -86,6 +107,22 @@ class AlbumQuery:
             cleaned = " ".join(" ".join(parts).split())
             if cleaned and cleaned.lower() not in {item.lower() for item in terms}:
                 terms.append(cleaned)
+
+        if self.is_track:
+            # A track is searched by its own title. The album is worth asking
+            # once, since peers file singles inside the record they come from,
+            # but never on its own: that is the wording that returns hundreds of
+            # unrelated folders.
+            title = self.track_title.strip()
+            add(credited, title)
+            simplified_title = normalize_title(title)
+            if simplified_title and simplified_title != title.lower():
+                add(credited, simplified_title)
+            if credited and album:
+                add(credited, album)
+            if not credited:
+                add(title)
+            return terms[:4]
 
         plain_album = _without_release_type(album)
         # Titles carrying edition noise rarely appear verbatim in shares.

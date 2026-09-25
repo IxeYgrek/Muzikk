@@ -611,6 +611,14 @@ export function UsersPanel() {
                     }
                   />
                   <Toggle
+                    label={t('admin.userCanRequestTrack')}
+                    hint={t('admin.userCanRequestTrackHint')}
+                    checked={user.can_request_track}
+                    onChange={(value) =>
+                      update.mutate({ id: user.id, patch: { can_request_track: value } })
+                    }
+                  />
+                  <Toggle
                     label={t('admin.userCanUpgrade')}
                     hint={t('admin.userCanUpgradeHint')}
                     checked={user.can_upgrade}

@@ -118,8 +118,10 @@ return [
                         . 'priority, public or private classification and seeder floor.',
                     '<strong>Upgrade option</strong>: replace an album you own in MP3 — or any other lossy '
                         . 'format — with a FLAC copy, as a permission granted per user.',
-                    'Requests cover a whole album, never a single track, with optional administrator '
-                        . 'approval and weekly quotas per account.',
+                    'Requests cover a whole album, with optional administrator approval and weekly '
+                        . 'quotas per account. <strong>One track at a time</strong> is possible too, as '
+                        . 'a permission granted per user and off by default — the file is still filed '
+                        . 'inside the album it belongs to.',
                     'Every candidate is scored on artist and title similarity, track count, track titles, '
                         . 'detected format, size per track and seeders or peer speed. Below the threshold, '
                         . 'Muzikk moves on.',
@@ -300,7 +302,8 @@ return [
                                 . 'follows Jellyfin. In local mode, administrators create and rename accounts '
                                 . 'and reset passwords from this page.',
                             'Per account: <strong>account active</strong>, <strong>request albums</strong>, '
-                                . '<strong>upgrade to lossless</strong>, <strong>import a folder</strong>.',
+                                . '<strong>request single tracks</strong>, <strong>upgrade to lossless</strong>, '
+                                . '<strong>import a folder</strong>.',
                             '<strong>Automatic approval</strong> as a three-way choice — follow the global '
                                 . 'setting, always, or never.',
                             'A <strong>weekly quota</strong> per account, zero meaning unlimited, with '

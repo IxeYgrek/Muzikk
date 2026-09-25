@@ -15,8 +15,9 @@ import { EmptyState, Spinner } from './ui'
 /**
  * Track hits, whether they come from the library or from MusicBrainz.
  *
- * A track is never downloadable on its own: the action always targets the album
- * that holds it, which is exactly the point of searching this way.
+ * The download button targets the album holding the track, which is the point of
+ * searching this way. Asking for the track alone is done from the album page,
+ * where the release it belongs to has been chosen.
  */
 export function TrackResults({
   tracks,

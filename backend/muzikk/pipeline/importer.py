@@ -85,6 +85,10 @@ class ImportRequest:
     is_upgrade: bool = False
     replaces_path: str | None = None
     confirm_replace: bool = False
+    # Set when one track was asked for rather than the record: the file is then
+    # paired with that recording instead of being run through the tracklist,
+    # which would otherwise tag it as track one of the album.
+    only_recording_mbid: str | None = None
 
 
 @dataclass(slots=True)
@@ -510,8 +514,24 @@ def _run_import(request: ImportRequest) -> ImportResult:
         result.error = "the MusicBrainz release has no track list"
         return result
 
-    pairs, warnings = map_files_to_tracks(audio_files, tracks)
-    result.warnings.extend(warnings)
+    if request.only_recording_mbid:
+        wanted = next(
+            (track for track in tracks if track.recording_mbid == request.only_recording_mbid),
+            None,
+        )
+        if wanted is None:
+            result.error = "the requested track is not on this release"
+            return result
+        if len(audio_files) != 1:
+            result.error = f"a track import expects one file, found {len(audio_files)}"
+            return result
+        # Paired by identifier, never by position: the one file downloaded is
+        # this recording, whatever its name or its place in the folder.
+        pairs = [(audio_files[0], wanted)]
+        result.warnings.append(f"single track import: {wanted.title}")
+    else:
+        pairs, warnings = map_files_to_tracks(audio_files, tracks)
+        result.warnings.extend(warnings)
     if not pairs:
         result.error = "unable to match the files with the track list"
         return result
