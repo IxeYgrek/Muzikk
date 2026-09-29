@@ -82,6 +82,40 @@ various = AlbumQuery(
 ).search_terms()
 check("various artists still ask the title alone", "Now 47" in various, various)
 
+# ------------------------------------------------ musicbrainz search queries
+
+import asyncio  # noqa: E402
+
+from muzikk.services.musicbrainz import MusicBrainzClient  # noqa: E402
+from muzikk.services.settings import MusicBrainzSettings  # noqa: E402
+
+sent: list[dict[str, object]] = []
+searcher = MusicBrainzClient(MusicBrainzSettings(url="http://mb:5000"))
+
+
+async def capture(path: str, params: dict[str, object], *, use_cache: bool = True) -> object:
+    sent.append({"path": path, **params})
+    return {"release-groups": []}
+
+
+searcher._get = capture  # type: ignore[assignment]
+
+# dismax reads neither a field name nor an operator: handed a Lucene filter it
+# searched for the words "and", "primarytype" and "album", which is how asking
+# for "The War Report" under the Albums tab returned Weather Report instead.
+asyncio.run(searcher.search_release_groups("The War Report", primary_type="album"))
+check("a filtered search does not use dismax", "dismax" not in sent[-1], sent[-1])
+check(
+    "and carries the filter as a real Lucene clause",
+    sent[-1]["query"] == "(The War Report) AND primarytype:album",
+    sent[-1]["query"],
+)
+
+sent.clear()
+asyncio.run(searcher.search_release_groups("The War Report"))
+check("an unfiltered search still uses dismax", sent[-1].get("dismax") == "true", sent[-1])
+check("and passes the text untouched", sent[-1]["query"] == "The War Report", sent[-1]["query"])
+
 # --------------------------------------------------------- release picking
 
 releases = [

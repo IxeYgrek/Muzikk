@@ -154,17 +154,31 @@ class MusicBrainzClient(HttpService):
         if not text:
             return {"count": 0, "offset": 0, "release-groups": []}
 
-        query = text
+        params: dict[str, Any] = {"limit": limit, "offset": offset}
         if primary_type:
-            query = f"({text}) AND primarytype:{escape_lucene(primary_type)}"
+            # Lucene, never dismax: the dismax parser reads no field and no
+            # operator, so "(The War Report) AND primarytype:album" reached the
+            # server as a bag of words including "album", which then matched
+            # "Original Album Classics" by Weather Report and not the record
+            # asked for. Filtering by type used to lose the album entirely.
+            params["query"] = f"({text}) AND primarytype:{escape_lucene(primary_type)}"
+        else:
+            # Nothing to filter, so dismax can do what it is good at: ranking
+            # free text without being told which field to look in.
+            params["query"] = text
+            params["dismax"] = "true"
 
-        params: dict[str, Any] = {"query": query, "limit": limit, "offset": offset, "dismax": "true"}
         try:
             return await self._get("/ws/2/release-group", params)
         except ServiceError:
-            # Some search servers reject dismax; retry with a structured query.
+            # Some search servers have no dismax at all, and a self-hosted
+            # instance without Solr has neither. Ask for the phrase first, then
+            # the loose words, so a title made of common ones still ranks.
             escaped = escape_lucene(text)
-            structured = f'releasegroup:({escaped}) OR artist:({escaped})'
+            phrase = f'"{escaped}"'
+            structured = (
+                f"releasegroup:{phrase}^10 OR releasegroup:({escaped}) OR artist:{phrase}"
+            )
             if primary_type:
                 structured = f"({structured}) AND primarytype:{escape_lucene(primary_type)}"
             return await self._get(
