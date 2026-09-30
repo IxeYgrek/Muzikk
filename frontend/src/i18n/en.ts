@@ -202,6 +202,8 @@ export const en: Translation = {
     subtitleLocal: 'What is already in the library folder',
     empty: 'The library is empty or not indexed yet',
     emptyHint: 'Trigger an index from the administration pages',
+    noResults: 'No album matches these filters',
+    noResultsHint: 'Try fewer words, or clear the filters above.',
     searchPlaceholder: 'Album or artist…',
     allGenres: 'All genres',
     allYears: 'All years',

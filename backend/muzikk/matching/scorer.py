@@ -81,6 +81,11 @@ def _haystack(candidate: Candidate) -> str:
     return " ".join(parts)
 
 
+def _file_names(candidate: Candidate) -> str:
+    """The audio file names, stripped of their extension."""
+    return " ".join(Path(item.filename.replace("\\", "/")).stem for item in candidate.audio_files)
+
+
 def _album_similarity(candidate: Candidate, query: AlbumQuery) -> float:
     target = query.normalized_album
     if not target:
@@ -102,6 +107,14 @@ def _artist_similarity(candidate: Candidate, query: AlbumQuery) -> float:
     haystack = normalize_artist(_haystack(candidate))
     if candidate.directory:
         haystack = f"{haystack} {normalize_artist(parent_dir(candidate.directory))}"
+    # A folder named after the record alone is ordinary, and the download folder
+    # of a previous attempt has no artist above it either. The files inside are
+    # named "Artist - Album - 01 - Title" and do say who plays, so they count as
+    # part of the path: without them a complete album already on disk was
+    # rejected for an artist that was written on every one of its files.
+    names = _file_names(candidate)
+    if names:
+        haystack = f"{haystack} {normalize_artist(names)}"
     if not haystack.strip():
         return 0.0
     return (

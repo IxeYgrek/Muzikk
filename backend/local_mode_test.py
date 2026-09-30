@@ -22,6 +22,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from fastapi.testclient import TestClient  # noqa: E402
 from mutagen.flac import FLAC  # noqa: E402
 from mutagen.id3 import ID3, TALB, TIT2, TPE1, TPE2, TRCK  # noqa: E402
+from sqlalchemy import select  # noqa: E402
 
 from muzikk.db import SessionLocal  # noqa: E402
 from muzikk.main import app  # noqa: E402
@@ -30,6 +31,7 @@ from muzikk.security import hash_password, verify_password  # noqa: E402
 from muzikk.services import local_library  # noqa: E402
 from muzikk.services import mode as mode_service  # noqa: E402
 from muzikk.services import settings as settings_service  # noqa: E402
+from muzikk.services import text_search  # noqa: E402
 from muzikk.services import users as users_service  # noqa: E402
 
 failures: list[str] = []
@@ -296,6 +298,53 @@ write_flac(
 grown = asyncio.run(local_library.scan_library(session))
 check("a new file is picked up", grown["updated"] == 1, grown)
 check("and counted", session.query(LibraryTrack).count() == 3)
+
+# --------------------------------------------------------------- apostrophes
+
+# Tags carry every spelling of an apostrophe, and a query typed with one of them
+# used to find nothing: "Diam's" returned no album while "Diam" returned all of
+# them.
+session.add(
+    LibraryAlbum(
+        jellyfin_id="local:bulle",
+        name="Dans ma bulle",
+        album_artist="Diam’s",
+        fuzzy_key="diams|dans ma bulle",
+    )
+)
+session.add(
+    LibraryTrack(
+        item_id="local:t:bulle:1",
+        album_item_id="local:bulle",
+        path=str(music / "Diam’s" / "Dans ma bulle" / "01 La boulette.mp3"),
+        title="La boulette",
+        artist="Diam’s",
+        album="Dans ma bulle",
+    )
+)
+session.commit()
+
+
+def album_search(text: str) -> list[str]:
+    return [
+        row.name
+        for row in session.execute(
+            select(LibraryAlbum).where(
+                text_search.contains_any((LibraryAlbum.name, LibraryAlbum.album_artist), text)
+            )
+        ).scalars()
+    ]
+
+
+check("a typed apostrophe finds the typographic one", album_search("Diam's") == ["Dans ma bulle"], album_search("Diam's"))
+check("the typographic one finds itself", album_search("Diam’s") == ["Dans ma bulle"])
+check("dropping the apostrophe works too", album_search("diams") == ["Dans ma bulle"])
+check("a plain prefix still works", album_search("Diam") == ["Dans ma bulle"])
+check("an unrelated word finds nothing", album_search("Diamond") == [], album_search("Diamond"))
+check(
+    "a track search ignores the apostrophe as well",
+    [row.title for row in local_library.search_tracks(session, "Diam's")] == ["La boulette"],
+)
 
 settings_service.invalidate_cache()
 session.close()

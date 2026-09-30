@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
-from sqlalchemy import delete, func, or_, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from ..matching.normalize import (
@@ -34,6 +34,7 @@ from ..models import LibraryAlbum, LibraryArtist, LibraryTrack
 from . import metadata as metadata_service
 from . import settings as settings_service
 from . import tags as tags_service
+from . import text_search
 from .library_index import backfill_release_groups
 
 logger = logging.getLogger(__name__)
@@ -467,15 +468,12 @@ def find_track(session: Session, item_id: str) -> LibraryTrack | None:
 
 
 def search_tracks(session: Session, query: str, *, limit: int = 40) -> list[LibraryTrack]:
-    pattern = f"%{query.strip()}%"
     return list(
         session.execute(
             select(LibraryTrack)
             .where(
-                or_(
-                    LibraryTrack.title.ilike(pattern),
-                    LibraryTrack.artist.ilike(pattern),
-                    LibraryTrack.album.ilike(pattern),
+                text_search.contains_any(
+                    (LibraryTrack.title, LibraryTrack.artist, LibraryTrack.album), query
                 )
             )
             .order_by(LibraryTrack.artist.asc(), LibraryTrack.title.asc())

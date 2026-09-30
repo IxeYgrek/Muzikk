@@ -28,8 +28,12 @@ export function AlbumCover({
   // one 404s, try the large one before giving up.
   const [failed, setFailed] = useState<string[]>([])
   const [useLarge, setUseLarge] = useState(false)
+  // Which URL is actually painted, not merely that one was: switching to the
+  // 1200 px file or to another album has to bring the placeholder back.
+  const [painted, setPainted] = useState<string | null>(null)
   const candidate = imageUrl(url, useLarge ? 1200 : size)
   const source = candidate && !failed.includes(candidate) ? candidate : undefined
+  const ready = source !== undefined && painted === source
 
   return (
     <div
@@ -38,25 +42,31 @@ export function AlbumCover({
         className,
       )}
     >
-      {source ? (
+      <div className="grid size-full place-items-center bg-gradient-to-br from-ink-700/70 to-ink-850">
+        <Disc3 className="size-1/3 text-ink-600" />
+      </div>
+      {source && (
         <img
           src={source}
-          alt={alt}
+          // The label waits for the file. A browser paints the alt text inside
+          // the empty frame while the image is still in flight, which showed
+          // album titles over the placeholder on every fresh search.
+          alt={ready ? alt : ''}
           loading="lazy"
           decoding="async"
+          onLoad={() => setPainted(source)}
           onError={() => {
-            if (source && size !== 1200 && !useLarge) {
+            if (size !== 1200 && !useLarge) {
               setUseLarge(true)
               return
             }
-            if (source) setFailed((seen) => [...seen, source])
+            setFailed((seen) => [...seen, source])
           }}
-          className="size-full object-cover"
+          className={clsx(
+            'absolute inset-0 size-full object-cover transition-opacity duration-300',
+            ready ? 'opacity-100' : 'opacity-0',
+          )}
         />
-      ) : (
-        <div className="grid size-full place-items-center bg-gradient-to-br from-ink-700/70 to-ink-850">
-          <Disc3 className="size-1/3 text-ink-600" />
-        </div>
       )}
     </div>
   )

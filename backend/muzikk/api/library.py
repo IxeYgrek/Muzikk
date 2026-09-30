@@ -7,12 +7,12 @@ but the queries below never need to know which.
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Query
-from sqlalchemy import String, func, or_, select
+from sqlalchemy import String, func, select
 
 from ..matching.normalize import normalize_artist, normalize_title
 from ..models import LibraryAlbum, LibraryArtist
 from ..schemas import LibraryAlbumDetail, LibraryAlbumOut, LibraryResponse, LibraryTrack
-from ..services import clients, library_index, library_sync, local_library
+from ..services import clients, library_index, library_sync, local_library, text_search
 from ..services import mode as mode_service
 from ..services.base import ServiceError
 from .deps import AdminUser, CurrentUser, SessionDep
@@ -45,10 +45,9 @@ async def list_albums(
     filters = []
 
     if q:
-        pattern = f"%{q.strip()}%"
-        filters.append(or_(LibraryAlbum.name.ilike(pattern), LibraryAlbum.album_artist.ilike(pattern)))
+        filters.append(text_search.contains_any((LibraryAlbum.name, LibraryAlbum.album_artist), q))
     if artist:
-        filters.append(LibraryAlbum.album_artist.ilike(f"%{artist.strip()}%"))
+        filters.append(text_search.contains(LibraryAlbum.album_artist, artist))
     if label:
         filters.append(LibraryAlbum.label.ilike(label.strip()))
     if year:
@@ -162,7 +161,7 @@ async def list_artists(
 ) -> list[dict[str, object]]:
     statement = select(LibraryArtist).order_by(LibraryArtist.name.asc())
     if q:
-        statement = statement.where(LibraryArtist.name.ilike(f"%{q.strip()}%"))
+        statement = statement.where(text_search.contains(LibraryArtist.name, q))
     rows = session.execute(statement.limit(limit)).scalars().all()
     return [
         {

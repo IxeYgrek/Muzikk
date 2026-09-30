@@ -205,6 +205,8 @@ export const fr = {
     subtitleLocal: 'Ce que le dossier de bibliothèque contient déjà',
     empty: 'La musicothèque est vide ou pas encore indexée',
     emptyHint: 'Lancez une indexation depuis l’administration',
+    noResults: 'Aucun album ne correspond à ces filtres',
+    noResultsHint: 'Essayez moins de mots, ou retirez les filtres ci-dessus.',
     searchPlaceholder: 'Album ou artiste…',
     allGenres: 'Tous les genres',
     allYears: 'Toutes les années',

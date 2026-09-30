@@ -146,6 +146,9 @@ export function LibraryPage() {
 
   const items = albums.data?.pages.flatMap((page) => page.items) ?? []
   const total = albums.data?.pages[0]?.count ?? 0
+  // An empty answer means two different things: a library never indexed, or a
+  // filter nobody matches. Telling the second one to run an index was absurd.
+  const filtered = Boolean(search || artist || label || genre || year || quality)
 
   return (
     <div className="space-y-6">
@@ -297,11 +300,19 @@ export function LibraryPage() {
           />
         )
       ) : items.length === 0 && !albums.isLoading ? (
-        <EmptyState
-          icon={<Disc3 className="size-10" />}
-          title={t('library.empty')}
-          hint={t('library.emptyHint')}
-        />
+        filtered ? (
+          <EmptyState
+            icon={<Search className="size-10" />}
+            title={t('library.noResults')}
+            hint={t('library.noResultsHint')}
+          />
+        ) : (
+          <EmptyState
+            icon={<Disc3 className="size-10" />}
+            title={t('library.empty')}
+            hint={t('library.emptyHint')}
+          />
+        )
       ) : (
         <>
           <p className="text-xs text-ink-500">
